@@ -1,0 +1,1330 @@
+{
+  "profiles": [
+    {
+      "id": "mock-admin-id",
+      "email": "teenzosstore@gmail.com",
+      "role": "admin",
+      "full_name": "Teenzosstore Admin",
+      "phone": "+91 78629 07344",
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "customer-1",
+      "email": "rohan@gmail.com",
+      "role": "customer",
+      "full_name": "Rohan Sharma",
+      "phone": "+91 99999 88888",
+      "is_active": true,
+      "created_at": "2026-06-26T12:00:00Z"
+    },
+    {
+      "id": "customer-2",
+      "email": "aditya@gmail.com",
+      "role": "customer",
+      "full_name": "Aditya Verma",
+      "phone": "+91 99999 77777",
+      "is_active": true,
+      "created_at": "2026-06-26T15:00:00Z"
+    }
+  ],
+  "categories": [
+    {
+      "id": "new-drops",
+      "name": "New Drops",
+      "slug": "new-drops",
+      "description": "Fresh silhouettes hitting the racks every week — cop before they're gone.",
+      "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/New%20drops/ChatGPT%20Image%20Aug%203%2C%202026%2C%2001_49_56%20AM.png",
+      "count": "24 styles",
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "best-sellers",
+      "name": "Best Sellers",
+      "slug": "best-sellers",
+      "description": "The pieces everyone's repping. Restocked weekly, sold out fast.",
+      "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Best%20sellers/ChatGPT%20Image%20Aug%2018%2C%202026%2C%2001_59_39%20PM.png",
+      "count": "18 styles",
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "oversized-tees",
+      "name": "Oversized Tees",
+      "slug": "oversized-tees",
+      "description": "Heavyweight cotton tees with boxy fits and bold graphic prints.",
+      "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Street%20wear%20collection/ChatGPT%20Image%20Aug%2018%2C%202026%2C%2001_36_54%20PM.png",
+      "count": "32 styles",
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "acid-wash",
+      "name": "Acid Wash",
+      "slug": "acid-wash",
+      "description": "Distressed, faded and one-of-one — every wash job is unique.",
+      "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Acid%20wash/ChatGPT%20Image%20Jul%2022%2C%202026%2C%2012_47_17%20AM.png",
+      "count": "12 styles",
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "gym-collection",
+      "name": "Gym Collection",
+      "slug": "gym-collection",
+      "description": "Moisture-wicking comfort for the grind. Built to move, styled to flex.",
+      "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Gym%20Collection/ChatGPT%20Image%20Jul%2022%2C%202026%2C%2010_12_54%20PM.png",
+      "count": "16 styles",
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "streetwear-collection",
+      "name": "Streetwear Collection",
+      "slug": "streetwear-collection",
+      "description": "Hoodies, cargo, jackets and the fits that define the culture.",
+      "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Street%20wear%20collection/ChatGPT%20Image%20Aug%2018%2C%202026%2C%2001_36_54%20PM.png",
+      "count": "28 styles",
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "limited-edition",
+      "name": "Limited Edition",
+      "slug": "limited-edition",
+      "description": "Numbered runs that never restock. When it's gone, it's gone.",
+      "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Limited%20Edition/ChatGPT%20Image%20Aug%203%2C%202026%2C%2001_20_31%20AM.png",
+      "count": "8 styles",
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    }
+  ],
+  "products": [
+    {
+      "id": "p1",
+      "name": "RAW Flex Heavyweight Oversized Tee — Black",
+      "slug": "raw-flex-heavyweight-oversized-tee-black",
+      "category_id": "oversized-tees",
+      "price": 1299,
+      "oldPrice": 1599,
+      "featured_image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Street%20wear%20collection/ChatGPT%20Image%20Aug%2018%2C%202026%2C%2001_36_54%20PM.png",
+      "badge": "Bestseller",
+      "rating": 4.9,
+      "is_active": true,
+      "is_featured": true,
+      "description": "240 GSM heavyweight cotton oversized tee with a boxy street fit. Drop shoulder, ribbed collar, screen-printed RAWFLEX graphic.",
+      "short_description": "Heavyweight oversized tee with bold RAWFLEX branding.",
+      "fabric": "240 GSM 100% combed cotton",
+      "stitching": "Double-needle sleeve & hem",
+      "product_images": [
+        {
+          "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Street%20wear%20collection/ChatGPT%20Image%20Aug%2018%2C%202026%2C%2001_36_54%20PM.png",
+          "color_name": "Black"
+        }
+      ],
+      "product_variants": [
+        {
+          "id": "p1-s-m",
+          "variant_name": "M",
+          "price": 1299,
+          "original_price": 1599,
+          "stock_quantity": 10
+        },
+        {
+          "id": "p1-s-l",
+          "variant_name": "L",
+          "price": 1299,
+          "original_price": 1599,
+          "stock_quantity": 12
+        },
+        {
+          "id": "p1-s-xl",
+          "variant_name": "XL",
+          "price": 1299,
+          "original_price": 1599,
+          "stock_quantity": 8
+        },
+        {
+          "id": "p1-s-xxl",
+          "variant_name": "XXL",
+          "price": 1299,
+          "original_price": 1599,
+          "stock_quantity": 5
+        }
+      ],
+      "product_information": [
+        {
+          "label": "Fabric",
+          "value": "240 GSM Cotton"
+        },
+        {
+          "label": "Fit",
+          "value": "Oversized"
+        },
+        {
+          "label": "Country of Origin",
+          "value": "India"
+        },
+        {
+          "label": "Wash Care",
+          "value": "Machine wash cold"
+        }
+      ],
+      "product_faqs": [
+        {
+          "question": "How does the fit run?",
+          "answer": "Oversized by design. Size down if you want a regular fit."
+        },
+        {
+          "question": "Is it pre-shrunk?",
+          "answer": "Yes, pre-shrunk and colour-fast."
+        }
+      ],
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p2",
+      "name": "Acid Wash Distressed Tee — Washed Grey",
+      "slug": "acid-wash-distressed-tee-washed-grey",
+      "category_id": "acid-wash",
+      "price": 1499,
+      "oldPrice": 1899,
+      "featured_image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Acid%20wash/ChatGPT%20Image%20Jul%2022%2C%202026%2C%2012_47_17%20AM.png",
+      "badge": "New",
+      "rating": 4.8,
+      "is_active": true,
+      "is_featured": true,
+      "description": "Hand-finished acid wash with distressed detailing. Every tee is one-of-one — no two washes look the same.",
+      "short_description": "One-of-one hand-finished acid wash tee.",
+      "fabric": "220 GSM cotton blend",
+      "product_images": [
+        {
+          "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Acid%20wash/ChatGPT%20Image%20Jul%2022%2C%202026%2C%2012_47_17%20AM.png",
+          "color_name": "Washed Grey"
+        }
+      ],
+      "product_variants": [
+        {
+          "id": "p2-s-m",
+          "variant_name": "M",
+          "price": 1499,
+          "original_price": 1899,
+          "stock_quantity": 6
+        },
+        {
+          "id": "p2-s-l",
+          "variant_name": "L",
+          "price": 1499,
+          "original_price": 1899,
+          "stock_quantity": 9
+        },
+        {
+          "id": "p2-s-xl",
+          "variant_name": "XL",
+          "price": 1499,
+          "original_price": 1899,
+          "stock_quantity": 7
+        }
+      ],
+      "product_information": [
+        {
+          "label": "Fabric",
+          "value": "220 GSM Blend"
+        },
+        {
+          "label": "Finish",
+          "value": "Hand Acid Wash"
+        },
+        {
+          "label": "Fit",
+          "value": "Oversized"
+        }
+      ],
+      "product_faqs": [
+        {
+          "question": "Will it fade more?",
+          "answer": "No, the wash is sealed. Colour stays put through washes."
+        }
+      ],
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p3",
+      "name": "FlexFit Gym Training Tee — Neon Detail",
+      "slug": "flexfit-gym-training-tee-neon-detail",
+      "category_id": "gym-collection",
+      "price": 999,
+      "oldPrice": 1299,
+      "featured_image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Gym%20Collection/IMG-20260818-WA0012.jpg",
+      "badge": "Hot",
+      "rating": 4.7,
+      "is_active": true,
+      "is_featured": true,
+      "description": "Moisture-wicking performance tee with breathable mesh panels and neon RAWFLEX details. Built for heavy sessions.",
+      "short_description": "Performance tee built for the grind.",
+      "fabric": "Polyester-spandex tech blend",
+      "product_images": [
+        {
+          "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Gym%20Collection/IMG-20260818-WA0012.jpg",
+          "color_name": "Black"
+        }
+      ],
+      "product_variants": [
+        {
+          "id": "p3-s-m",
+          "variant_name": "M",
+          "price": 999,
+          "original_price": 1299,
+          "stock_quantity": 14
+        },
+        {
+          "id": "p3-s-l",
+          "variant_name": "L",
+          "price": 999,
+          "original_price": 1299,
+          "stock_quantity": 16
+        },
+        {
+          "id": "p3-s-xl",
+          "variant_name": "XL",
+          "price": 999,
+          "original_price": 1299,
+          "stock_quantity": 11
+        }
+      ],
+      "product_information": [
+        {
+          "label": "Fabric",
+          "value": "Tech Blend"
+        },
+        {
+          "label": "Fit",
+          "value": "Athletic"
+        },
+        {
+          "label": "Feature",
+          "value": "Moisture Wicking"
+        }
+      ],
+      "product_faqs": [
+        {
+          "question": "Is it sweat-proof?",
+          "answer": "Moisture-wicking and quick-dry for intense sessions."
+        }
+      ],
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p4",
+      "name": "Limited Edition Logo Hoodie — Numbered Drop",
+      "slug": "limited-edition-logo-hoodie-numbered-drop",
+      "category_id": "limited-edition",
+      "price": 2499,
+      "oldPrice": 2999,
+      "featured_image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Limited%20Edition/ChatGPT%20Image%20Aug%203%2C%202026%2C%2001_20_31%20AM.png",
+      "badge": "Limited",
+      "rating": 4.9,
+      "is_active": true,
+      "is_featured": true,
+      "description": "Numbered limited run — each hoodie has its own drop number. Fleece-lined, heavyweight and never restocked.",
+      "short_description": "Numbered run fleece hoodie. Never restocked.",
+      "fabric": "350 GSM fleece",
+      "product_images": [
+        {
+          "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Limited%20Edition/ChatGPT%20Image%20Aug%203%2C%202026%2C%2001_20_31%20AM.png",
+          "color_name": "Black"
+        }
+      ],
+      "product_variants": [
+        {
+          "id": "p4-s-m",
+          "variant_name": "M",
+          "price": 2499,
+          "original_price": 2999,
+          "stock_quantity": 3
+        },
+        {
+          "id": "p4-s-l",
+          "variant_name": "L",
+          "price": 2499,
+          "original_price": 2999,
+          "stock_quantity": 4
+        },
+        {
+          "id": "p4-s-xl",
+          "variant_name": "XL",
+          "price": 2499,
+          "original_price": 2999,
+          "stock_quantity": 2
+        }
+      ],
+      "product_information": [
+        {
+          "label": "Fabric",
+          "value": "350 GSM Fleece"
+        },
+        {
+          "label": "Run",
+          "value": "Numbered Drop"
+        },
+        {
+          "label": "Fit",
+          "value": "Oversized"
+        }
+      ],
+      "product_faqs": [
+        {
+          "question": "Will this be restocked?",
+          "answer": "No. Limited edition runs are one-time only."
+        }
+      ],
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p5",
+      "name": "Street Cargo Pants — Olive",
+      "slug": "street-cargo-pants-olive",
+      "category_id": "streetwear-collection",
+      "price": 1799,
+      "oldPrice": 2199,
+      "featured_image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Street%20wear%20collection/ChatGPT%20Image%20Aug%2018%2C%202026%2C%2002_10_00%20PM.png",
+      "badge": "",
+      "rating": 4.6,
+      "is_active": true,
+      "is_featured": false,
+      "description": "Six-pocket tactical cargo pants with tapered fit, ripstop fabric and adjustable ankle cuffs.",
+      "short_description": "Tactical six-pocket cargo pants.",
+      "fabric": "Ripstop cotton-poly",
+      "product_images": [
+        {
+          "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Street%20wear%20collection/ChatGPT%20Image%20Aug%2018%2C%202026%2C%2002_10_00%20PM.png",
+          "color_name": "Olive"
+        }
+      ],
+      "product_variants": [
+        {
+          "id": "p5-s-30",
+          "variant_name": "30",
+          "price": 1799,
+          "original_price": 2199,
+          "stock_quantity": 8
+        },
+        {
+          "id": "p5-s-32",
+          "variant_name": "32",
+          "price": 1799,
+          "original_price": 2199,
+          "stock_quantity": 10
+        },
+        {
+          "id": "p5-s-34",
+          "variant_name": "34",
+          "price": 1799,
+          "original_price": 2199,
+          "stock_quantity": 6
+        }
+      ],
+      "product_information": [
+        {
+          "label": "Fabric",
+          "value": "Ripstop Blend"
+        },
+        {
+          "label": "Fit",
+          "value": "Tapered"
+        },
+        {
+          "label": "Pockets",
+          "value": "Six-Pocket"
+        }
+      ],
+      "product_faqs": [],
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p6",
+      "name": "Graphic Oversized Tee — 'FLEX' Print",
+      "slug": "graphic-oversized-tee-flex-print",
+      "category_id": "oversized-tees",
+      "price": 1399,
+      "oldPrice": 1699,
+      "featured_image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Street%20wear%20collection/ChatGPT%20Image%20Aug%2018%2C%202026%2C%2001_40_26%20PM.png",
+      "badge": "New Drop",
+      "rating": 4.8,
+      "is_active": true,
+      "is_featured": false,
+      "description": "Big-front 'FLEX' graphic print on heavyweight cotton. The statement piece of the season.",
+      "short_description": "Bold front graphic on heavyweight cotton.",
+      "fabric": "240 GSM combed cotton",
+      "product_images": [
+        {
+          "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Street%20wear%20collection/ChatGPT%20Image%20Aug%2018%2C%202026%2C%2001_40_26%20PM.png",
+          "color_name": "Black"
+        }
+      ],
+      "product_variants": [
+        {
+          "id": "p6-s-m",
+          "variant_name": "M",
+          "price": 1399,
+          "original_price": 1699,
+          "stock_quantity": 9
+        },
+        {
+          "id": "p6-s-l",
+          "variant_name": "L",
+          "price": 1399,
+          "original_price": 1699,
+          "stock_quantity": 11
+        },
+        {
+          "id": "p6-s-xl",
+          "variant_name": "XL",
+          "price": 1399,
+          "original_price": 1699,
+          "stock_quantity": 7
+        }
+      ],
+      "product_information": [
+        {
+          "label": "Fabric",
+          "value": "240 GSM Cotton"
+        },
+        {
+          "label": "Print",
+          "value": "Screen Printed"
+        },
+        {
+          "label": "Fit",
+          "value": "Oversized"
+        }
+      ],
+      "product_faqs": [],
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p7",
+      "name": "Acid Wash Denim Jacket — Faded Blue",
+      "slug": "acid-wash-denim-jacket-faded-blue",
+      "category_id": "acid-wash",
+      "price": 2799,
+      "oldPrice": 3299,
+      "featured_image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Acid%20wash/ChatGPT%20Image%20Jul%2022%2C%202026%2C%2012_48_59%20AM.png",
+      "badge": "",
+      "rating": 4.5,
+      "is_active": true,
+      "is_featured": false,
+      "description": "Faded acid wash denim jacket with an oversized street cut and distressed hardware.",
+      "short_description": "Faded acid wash denim with street cut.",
+      "fabric": "12oz denim",
+      "product_images": [
+        {
+          "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Acid%20wash/ChatGPT%20Image%20Jul%2022%2C%202026%2C%2012_48_59%20AM.png",
+          "color_name": "Faded Blue"
+        }
+      ],
+      "product_variants": [
+        {
+          "id": "p7-s-m",
+          "variant_name": "M",
+          "price": 2799,
+          "original_price": 3299,
+          "stock_quantity": 5
+        },
+        {
+          "id": "p7-s-l",
+          "variant_name": "L",
+          "price": 2799,
+          "original_price": 3299,
+          "stock_quantity": 6
+        },
+        {
+          "id": "p7-s-xl",
+          "variant_name": "XL",
+          "price": 2799,
+          "original_price": 3299,
+          "stock_quantity": 4
+        }
+      ],
+      "product_information": [
+        {
+          "label": "Fabric",
+          "value": "12oz Denim"
+        },
+        {
+          "label": "Finish",
+          "value": "Acid Wash"
+        },
+        {
+          "label": "Fit",
+          "value": "Oversized"
+        }
+      ],
+      "product_faqs": [],
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p8",
+      "name": "Athleisure Joggers — Tech Fabric",
+      "slug": "athleisure-joggers-tech-fabric",
+      "category_id": "gym-collection",
+      "price": 1599,
+      "oldPrice": 1999,
+      "featured_image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Gym%20Collection/IMG-20260818-WA0015.jpg",
+      "badge": "Popular",
+      "rating": 4.7,
+      "is_active": true,
+      "is_featured": false,
+      "description": "Four-way stretch tech joggers with zip pockets, tapered fit and a gusseted crotch for full range of motion.",
+      "short_description": "Four-way stretch tech joggers with zip pockets.",
+      "fabric": "Nylon-spandex tech fabric",
+      "product_images": [
+        {
+          "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Gym%20Collection/IMG-20260818-WA0015.jpg",
+          "color_name": "Black"
+        }
+      ],
+      "product_variants": [
+        {
+          "id": "p8-s-s",
+          "variant_name": "S",
+          "price": 1599,
+          "original_price": 1999,
+          "stock_quantity": 10
+        },
+        {
+          "id": "p8-s-m",
+          "variant_name": "M",
+          "price": 1599,
+          "original_price": 1999,
+          "stock_quantity": 12
+        },
+        {
+          "id": "p8-s-l",
+          "variant_name": "L",
+          "price": 1599,
+          "original_price": 1999,
+          "stock_quantity": 9
+        },
+        {
+          "id": "p8-s-xl",
+          "variant_name": "XL",
+          "price": 1599,
+          "original_price": 1999,
+          "stock_quantity": 6
+        }
+      ],
+      "product_information": [
+        {
+          "label": "Fabric",
+          "value": "Tech Blend"
+        },
+        {
+          "label": "Fit",
+          "value": "Tapered"
+        },
+        {
+          "label": "Pockets",
+          "value": "Zip Pockets"
+        }
+      ],
+      "product_faqs": [],
+      "created_at": "2026-06-25T14:34:14Z"
+    }
+  ],
+  "orders": [
+    {
+      "id": "order-1",
+      "order_number": "10001",
+      "total_amount": 1299,
+      "order_status": "processing",
+      "payment_status": "paid",
+      "created_at": "2026-06-27T10:00:00Z",
+      "user_id": "customer-1",
+      "subtotal": 1299,
+      "shipping_cost": 0,
+      "payment_method": "Cash on Delivery"
+    },
+    {
+      "id": "order-2",
+      "order_number": "10002",
+      "total_amount": 2998,
+      "order_status": "cancelled",
+      "payment_status": "pending",
+      "created_at": "2026-06-27T12:00:00Z",
+      "cancelled_at": "2026-06-27T18:42:42.330Z",
+      "user_id": "customer-1",
+      "subtotal": 2998,
+      "shipping_cost": 0,
+      "payment_method": "Cash on Delivery"
+    }
+  ],
+  "reviews": [],
+  "hero_slides": [
+    {
+      "id": "slide-1",
+      "image_url": "/hero-stock-1.png",
+      "title": "Teenzosstore",
+      "subtitle": "Wear your vibe.",
+      "button_text": "Shop New Drops",
+      "button_link": "https://wa.me/917862907344",
+      "text_mode": "global",
+      "is_active": true,
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "slide-2",
+      "image_url": "/hero-stock-2.png",
+      "title": "",
+      "subtitle": "",
+      "button_text": "",
+      "button_link": "",
+      "text_mode": "global",
+      "is_active": true,
+      "display_order": 1,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "slide-3",
+      "image_url": "/hero-stock-3.png",
+      "title": "",
+      "subtitle": "",
+      "button_text": "",
+      "button_link": "",
+      "text_mode": "global",
+      "is_active": true,
+      "display_order": 2,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "slide-4",
+      "image_url": "/hero-stock-4.png",
+      "title": "",
+      "subtitle": "",
+      "button_text": "",
+      "button_link": "",
+      "text_mode": "global",
+      "is_active": true,
+      "display_order": 3,
+      "created_at": "2026-06-25T14:34:14Z"
+    }
+  ],
+  "coupons": [
+    {
+      "id": "c1",
+      "code": "FLEX50",
+      "type": "percentage",
+      "value": 10,
+      "min_purchase": 999,
+      "is_active": true,
+      "created_at": "2026-06-27T18:00:00Z"
+    },
+    {
+      "id": "c2",
+      "code": "WELCOME100",
+      "type": "flat",
+      "value": 100,
+      "min_purchase": 499,
+      "is_active": true,
+      "created_at": "2026-06-27T18:00:00Z"
+    }
+  ],
+  "settings": {
+    "announcements": [
+      {
+        "id": "ann-1",
+        "text": "New Drop Alert! Limited Edition Drop 004 is Live — Free Shipping Pan-India.",
+        "is_active": true
+      }
+    ],
+    "faqs": [],
+    "shipping": {
+      "flat_rate": 99,
+      "free_threshold": 1999,
+      "cod_charge": 50,
+      "online_discount": 0
+    },
+    "home_banner_enabled": false
+  },
+  "email_otps": [],
+  "product_variants": [
+    {
+      "id": "p1-s-m",
+      "product_id": "p1",
+      "variant_name": "M",
+      "price": 1299,
+      "original_price": 1599,
+      "stock_quantity": 10,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p1-s-l",
+      "product_id": "p1",
+      "variant_name": "L",
+      "price": 1299,
+      "original_price": 1599,
+      "stock_quantity": 12,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p1-s-xl",
+      "product_id": "p1",
+      "variant_name": "XL",
+      "price": 1299,
+      "original_price": 1599,
+      "stock_quantity": 8,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p1-s-xxl",
+      "product_id": "p1",
+      "variant_name": "XXL",
+      "price": 1299,
+      "original_price": 1599,
+      "stock_quantity": 5,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p2-s-m",
+      "product_id": "p2",
+      "variant_name": "M",
+      "price": 1499,
+      "original_price": 1899,
+      "stock_quantity": 6,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p2-s-l",
+      "product_id": "p2",
+      "variant_name": "L",
+      "price": 1499,
+      "original_price": 1899,
+      "stock_quantity": 9,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p2-s-xl",
+      "product_id": "p2",
+      "variant_name": "XL",
+      "price": 1499,
+      "original_price": 1899,
+      "stock_quantity": 7,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p3-s-m",
+      "product_id": "p3",
+      "variant_name": "M",
+      "price": 999,
+      "original_price": 1299,
+      "stock_quantity": 14,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p3-s-l",
+      "product_id": "p3",
+      "variant_name": "L",
+      "price": 999,
+      "original_price": 1299,
+      "stock_quantity": 16,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p3-s-xl",
+      "product_id": "p3",
+      "variant_name": "XL",
+      "price": 999,
+      "original_price": 1299,
+      "stock_quantity": 11,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p4-s-m",
+      "product_id": "p4",
+      "variant_name": "M",
+      "price": 2499,
+      "original_price": 2999,
+      "stock_quantity": 3,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p4-s-l",
+      "product_id": "p4",
+      "variant_name": "L",
+      "price": 2499,
+      "original_price": 2999,
+      "stock_quantity": 4,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p4-s-xl",
+      "product_id": "p4",
+      "variant_name": "XL",
+      "price": 2499,
+      "original_price": 2999,
+      "stock_quantity": 2,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p5-s-30",
+      "product_id": "p5",
+      "variant_name": "30",
+      "price": 1799,
+      "original_price": 2199,
+      "stock_quantity": 8,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p5-s-32",
+      "product_id": "p5",
+      "variant_name": "32",
+      "price": 1799,
+      "original_price": 2199,
+      "stock_quantity": 10,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p5-s-34",
+      "product_id": "p5",
+      "variant_name": "34",
+      "price": 1799,
+      "original_price": 2199,
+      "stock_quantity": 6,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p6-s-m",
+      "product_id": "p6",
+      "variant_name": "M",
+      "price": 1399,
+      "original_price": 1699,
+      "stock_quantity": 9,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p6-s-l",
+      "product_id": "p6",
+      "variant_name": "L",
+      "price": 1399,
+      "original_price": 1699,
+      "stock_quantity": 11,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p6-s-xl",
+      "product_id": "p6",
+      "variant_name": "XL",
+      "price": 1399,
+      "original_price": 1699,
+      "stock_quantity": 7,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p7-s-m",
+      "product_id": "p7",
+      "variant_name": "M",
+      "price": 2799,
+      "original_price": 3299,
+      "stock_quantity": 5,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p7-s-l",
+      "product_id": "p7",
+      "variant_name": "L",
+      "price": 2799,
+      "original_price": 3299,
+      "stock_quantity": 6,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p7-s-xl",
+      "product_id": "p7",
+      "variant_name": "XL",
+      "price": 2799,
+      "original_price": 3299,
+      "stock_quantity": 4,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p8-s-s",
+      "product_id": "p8",
+      "variant_name": "S",
+      "price": 1599,
+      "original_price": 1999,
+      "stock_quantity": 10,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p8-s-m",
+      "product_id": "p8",
+      "variant_name": "M",
+      "price": 1599,
+      "original_price": 1999,
+      "stock_quantity": 12,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p8-s-l",
+      "product_id": "p8",
+      "variant_name": "L",
+      "price": 1599,
+      "original_price": 1999,
+      "stock_quantity": 9,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "p8-s-xl",
+      "product_id": "p8",
+      "variant_name": "XL",
+      "price": 1599,
+      "original_price": 1999,
+      "stock_quantity": 6,
+      "is_active": true,
+      "created_at": "2026-06-25T14:34:14Z"
+    }
+  ],
+  "product_images": [
+    {
+      "id": "img-p1-i5pzn",
+      "product_id": "p1",
+      "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Street%20wear%20collection/ChatGPT%20Image%20Aug%2018%2C%202026%2C%2001_36_54%20PM.png",
+      "sort_order": 0,
+      "color_name": "Black",
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "img-p2-4t4dv",
+      "product_id": "p2",
+      "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Acid%20wash/ChatGPT%20Image%20Jul%2022%2C%202026%2C%2012_47_17%20AM.png",
+      "sort_order": 0,
+      "color_name": "Washed Grey",
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "img-p3-n2y46",
+      "product_id": "p3",
+      "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Gym%20Collection/IMG-20260818-WA0012.jpg",
+      "sort_order": 0,
+      "color_name": "Black",
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "img-p4-jt3j2",
+      "product_id": "p4",
+      "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Limited%20Edition/ChatGPT%20Image%20Aug%203%2C%202026%2C%2001_20_31%20AM.png",
+      "sort_order": 0,
+      "color_name": "Black",
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "img-p5-1oqor",
+      "product_id": "p5",
+      "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Street%20wear%20collection/ChatGPT%20Image%20Aug%2018%2C%202026%2C%2002_10_00%20PM.png",
+      "sort_order": 0,
+      "color_name": "Olive",
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "img-p6-kwsz5",
+      "product_id": "p6",
+      "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Street%20wear%20collection/ChatGPT%20Image%20Aug%2018%2C%202026%2C%2001_40_26%20PM.png",
+      "sort_order": 0,
+      "color_name": "Black",
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "img-p7-u5ok8",
+      "product_id": "p7",
+      "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Acid%20wash/ChatGPT%20Image%20Jul%2022%2C%202026%2C%2012_48_59%20AM.png",
+      "sort_order": 0,
+      "color_name": "Faded Blue",
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "img-p8-v474i",
+      "product_id": "p8",
+      "image_url": "https://bwudwdyzqkvpbymheybq.supabase.co/storage/v1/object/public/rawflex/categories/Gym%20Collection/IMG-20260818-WA0015.jpg",
+      "sort_order": 0,
+      "color_name": "Black",
+      "created_at": "2026-06-25T14:34:14Z"
+    }
+  ],
+  "product_information": [
+    {
+      "id": "info-p1-zn8e3",
+      "product_id": "p1",
+      "label": "Fabric",
+      "value": "240 GSM Cotton",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p1-nik60",
+      "product_id": "p1",
+      "label": "Fit",
+      "value": "Oversized",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p1-l2xri",
+      "product_id": "p1",
+      "label": "Country of Origin",
+      "value": "India",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p1-e95lk",
+      "product_id": "p1",
+      "label": "Wash Care",
+      "value": "Machine wash cold",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p2-hnxuy",
+      "product_id": "p2",
+      "label": "Fabric",
+      "value": "220 GSM Blend",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p2-v0n8j",
+      "product_id": "p2",
+      "label": "Finish",
+      "value": "Hand Acid Wash",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p2-nchvk",
+      "product_id": "p2",
+      "label": "Fit",
+      "value": "Oversized",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p3-zrax0",
+      "product_id": "p3",
+      "label": "Fabric",
+      "value": "Tech Blend",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p3-cai2f",
+      "product_id": "p3",
+      "label": "Fit",
+      "value": "Athletic",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p3-g1hiw",
+      "product_id": "p3",
+      "label": "Feature",
+      "value": "Moisture Wicking",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p4-woool",
+      "product_id": "p4",
+      "label": "Fabric",
+      "value": "350 GSM Fleece",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p4-9e0ai",
+      "product_id": "p4",
+      "label": "Run",
+      "value": "Numbered Drop",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p4-l1hrw",
+      "product_id": "p4",
+      "label": "Fit",
+      "value": "Oversized",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p5-ffkmx",
+      "product_id": "p5",
+      "label": "Fabric",
+      "value": "Ripstop Blend",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p5-1ehev",
+      "product_id": "p5",
+      "label": "Fit",
+      "value": "Tapered",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p5-c7ww2",
+      "product_id": "p5",
+      "label": "Pockets",
+      "value": "Six-Pocket",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p6-1kbro",
+      "product_id": "p6",
+      "label": "Fabric",
+      "value": "240 GSM Cotton",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p6-4d4ls",
+      "product_id": "p6",
+      "label": "Print",
+      "value": "Screen Printed",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p6-j6b2k",
+      "product_id": "p6",
+      "label": "Fit",
+      "value": "Oversized",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p7-iyev2",
+      "product_id": "p7",
+      "label": "Fabric",
+      "value": "12oz Denim",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p7-sy5eg",
+      "product_id": "p7",
+      "label": "Finish",
+      "value": "Acid Wash",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p7-gdwyq",
+      "product_id": "p7",
+      "label": "Fit",
+      "value": "Oversized",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p8-ayl8r",
+      "product_id": "p8",
+      "label": "Fabric",
+      "value": "Tech Blend",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p8-3u2kb",
+      "product_id": "p8",
+      "label": "Fit",
+      "value": "Tapered",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "info-p8-kqa6f",
+      "product_id": "p8",
+      "label": "Pockets",
+      "value": "Zip Pockets",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    }
+  ],
+  "product_faqs": [
+    {
+      "id": "faq-p1-pw1wg",
+      "product_id": "p1",
+      "question": "How does the fit run?",
+      "answer": "Oversized by design. Size down if you want a regular fit.",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "faq-p1-qf8sc",
+      "product_id": "p1",
+      "question": "Is it pre-shrunk?",
+      "answer": "Yes, pre-shrunk and colour-fast.",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "faq-p2-t5s81",
+      "product_id": "p2",
+      "question": "Will it fade more?",
+      "answer": "No, the wash is sealed. Colour stays put through washes.",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "faq-p3-gms1x",
+      "product_id": "p3",
+      "question": "Is it sweat-proof?",
+      "answer": "Moisture-wicking and quick-dry for intense sessions.",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    },
+    {
+      "id": "faq-p4-h67bd",
+      "product_id": "p4",
+      "question": "Will this be restocked?",
+      "answer": "No. Limited edition runs are one-time only.",
+      "display_order": 0,
+      "created_at": "2026-06-25T14:34:14Z"
+    }
+  ],
+  "addresses": [],
+  "cart_items": [],
+  "order_items": [],
+  "home_banner_images": [],
+  "contact_inquiries": [],
+  "global_faqs": []
+}

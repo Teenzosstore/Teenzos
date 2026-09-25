@@ -1,0 +1,23 @@
+{
+  "name": "TeenZos",
+  "short_name": "TeenZos",
+  "description": "TeenZos — premium streetwear built for the bold. Explore oversized tees, graphic tees, streetwear drops and new arrivals.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F7F7F5",
+  "theme_color": "#F72585",
+  "icons": [
+    {
+      "src": "/favicon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

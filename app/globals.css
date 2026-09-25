@@ -1,0 +1,1046 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   TEENZOS GLOBAL THEME
+   Streetwear: Black + White + Pink + Cyan + Orange
+   ============================================================ */
+
+:root {
+  /* Font variables loaded via Next.js next/font in app/layout.tsx:
+     --font-body (Poppins)
+     --font-display (Anton)
+     --font-marker (Permanent Marker)
+  */
+
+  --tz-black: #0b0d0e;
+  --tz-dark: #121619;
+  --tz-charcoal: #1a1e20;
+
+  --tz-white: #f7f7f5;
+  --tz-offwhite: #f1f1ef;
+  --tz-light: #e8e8e6;
+
+  --tz-pink: #f72585;
+  --tz-pink-light: #ff4d9a;
+  --tz-pink-dark: #d91668;
+  --tz-pink-soft: #ffe1ed;
+
+  --tz-cyan: #36b8c5;
+  --tz-cyan-light: #65d0d9;
+  --tz-cyan-dark: #218d98;
+  --tz-cyan-soft: #ddf6f8;
+
+  --tz-orange: #f47b20;
+  --tz-orange-light: #ff9a4d;
+  --tz-orange-dark: #d85e0b;
+  --tz-orange-soft: #fff0e3;
+
+  --tz-ink: #111315;
+  --tz-muted: #6b7073;
+  --tz-muted-dark: #a7acae;
+
+  --tz-brand: #f72585;
+  --tz-accent: #36b8c5;
+  --tz-highlight: #f47b20;
+
+  --tz-card: #ffffff;
+  --tz-card-dark: #171b1d;
+  --tz-border: #dcdcdc;
+  --tz-border-dark: #292d2f;
+}
+
+/* ============================================================
+   BASE
+   ============================================================ */
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--tz-white);
+  color: var(--tz-ink);
+  font-family: var(--font-body);
+  overflow-x: hidden;
+}
+
+* {
+  scroll-behavior: smooth;
+}
+
+::selection {
+  background-color: var(--tz-pink);
+  color: #ffffff;
+}
+
+:focus-visible {
+  outline: 2px solid var(--tz-pink);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* ============================================================
+   FONT UTILITIES
+   ============================================================ */
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-body {
+  font-family: var(--font-body);
+}
+
+.font-marker {
+  font-family: var(--font-marker);
+}
+
+/* ============================================================
+   SCROLL REVEAL
+   ============================================================ */
+
+.reveal {
+  opacity: 0;
+  transform: translateY(32px);
+  transition:
+    opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.reveal-delay-1 {
+  transition-delay: 0.08s;
+}
+
+.reveal-delay-2 {
+  transition-delay: 0.16s;
+}
+
+.reveal-delay-3 {
+  transition-delay: 0.24s;
+}
+
+.reveal-delay-4 {
+  transition-delay: 0.32s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* ============================================================
+   SECTION EYEBROW
+   ============================================================ */
+
+.eyebrow {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--tz-pink);
+}
+
+/* ============================================================
+   SECTION HEADING
+   ============================================================ */
+
+.section-heading {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 0.95;
+  text-transform: uppercase;
+  color: var(--tz-ink);
+  font-size: clamp(2.2rem, 5vw, 4rem);
+}
+
+.section-sub {
+  font-family: var(--font-body);
+  color: var(--tz-muted);
+  font-size: clamp(0.95rem, 1.3vw, 1.1rem);
+  line-height: 1.7;
+}
+
+/* ============================================================
+   BOTANICAL / DECORATIVE LINE DIVIDER
+   ============================================================ */
+
+.line-divider {
+  width: 100%;
+  height: 28px;
+  display: block;
+}
+
+/* ============================================================
+   BRAND GRADIENT TEXT
+   ============================================================ */
+
+@keyframes brand-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
+.gradient-gold-text {
+  background-image: linear-gradient(
+    90deg,
+    var(--tz-pink),
+    var(--tz-pink-light) 35%,
+    var(--tz-cyan) 70%,
+    var(--tz-orange)
+  );
+
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+
+  animation: brand-shimmer 6s ease-in-out infinite alternate;
+}
+
+/* ============================================================
+   TOAST / FADE-IN
+   ============================================================ */
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out;
+}
+
+/* ============================================================
+   FADE IN UP
+   ============================================================ */
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ============================================================
+   SLIDE IN
+   ============================================================ */
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
+}
+
+/* ============================================================
+   SOFT PULSE
+   ============================================================ */
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.8;
+    transform: scale(1.02);
+  }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 3s ease-in-out infinite;
+}
+
+/* ============================================================
+   PINK PULSE
+   ============================================================ */
+
+@keyframes pulse-pink {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(247, 37, 133, 0.35);
+  }
+
+  50% {
+    box-shadow: 0 0 0 12px rgba(247, 37, 133, 0);
+  }
+}
+
+.animate-pulse-pink {
+  animation: pulse-pink 2s infinite;
+}
+
+/* ============================================================
+   CARD HOVER LIFT
+   ============================================================ */
+
+.lift {
+  transition:
+    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.lift:hover {
+  transform: translateY(-7px);
+}
+
+/* ============================================================
+   MARQUEE
+   ============================================================ */
+
+@keyframes marquee-scroll {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee-scroll 32s linear infinite;
+}
+
+.marquee-row:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+/* ============================================================
+   NOISE / GRAIN
+   ============================================================ */
+
+.grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.12;
+  mix-blend-mode: multiply;
+
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+}
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--tz-offwhite);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--tz-pink-light);
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--tz-black);
+}
+
+/* ============================================================
+   HIDE SCROLLBAR
+   ============================================================ */
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ============================================================
+   TEENZOS COMMON UTILITIES
+   ============================================================ */
+
+.tz-pink {
+  color: var(--tz-pink);
+}
+
+.tz-cyan {
+  color: var(--tz-cyan);
+}
+
+.tz-orange {
+  color: var(--tz-orange);
+}
+
+.tz-black {
+  color: var(--tz-black);
+}
+
+.tz-bg-pink {
+  background-color: var(--tz-pink);
+}
+
+.tz-bg-cyan {
+  background-color: var(--tz-cyan);
+}
+
+.tz-bg-orange {
+  background-color: var(--tz-orange);
+}
+
+.tz-bg-black {
+  background-color: var(--tz-black);
+}
+
+/* ============================================================
+   ADMIN DASHBOARD
+   TeenZos black / white / pink / cyan theme
+   Scoped to .admin-shell
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   Surfaces
+   ------------------------------------------------------------ */
+
+.admin-shell .bg-white {
+  background-color: #ffffff !important;
+}
+
+.admin-shell .bg-stone-50,
+.admin-shell .bg-gray-50 {
+  background-color: #f7f7f5 !important;
+}
+
+.admin-shell .bg-stone-100,
+.admin-shell .bg-gray-100 {
+  background-color: #f1f1ef !important;
+}
+
+.admin-shell .bg-stone-200,
+.admin-shell .bg-gray-200 {
+  background-color: #e8e8e6 !important;
+}
+
+.admin-shell .bg-stone-300,
+.admin-shell .bg-gray-300 {
+  background-color: #d5d7d8 !important;
+}
+
+.admin-shell .bg-white\/60 {
+  background-color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.admin-shell .bg-black\/5 {
+  background-color: rgba(11, 13, 14, 0.05) !important;
+}
+
+.admin-shell .bg-stone-50\/50 {
+  background-color: rgba(247, 247, 245, 0.5) !important;
+}
+
+.admin-shell .bg-stone-100\/50 {
+  background-color: rgba(241, 241, 239, 0.5) !important;
+}
+
+/* ------------------------------------------------------------
+   Text
+   ------------------------------------------------------------ */
+
+.admin-shell .text-stone-900,
+.admin-shell .text-gray-900 {
+  color: #111315 !important;
+}
+
+.admin-shell .text-stone-800,
+.admin-shell .text-gray-800 {
+  color: #1a1e20 !important;
+}
+
+.admin-shell .text-stone-700,
+.admin-shell .text-gray-700 {
+  color: #303538 !important;
+}
+
+.admin-shell .text-stone-600,
+.admin-shell .text-gray-600 {
+  color: #52585b !important;
+}
+
+.admin-shell .text-stone-500,
+.admin-shell .text-gray-500 {
+  color: #6b7073 !important;
+}
+
+.admin-shell .text-stone-400,
+.admin-shell .text-gray-400 {
+  color: #858b8e !important;
+}
+
+.admin-shell .text-stone-300,
+.admin-shell .text-gray-300 {
+  color: #a7acae !important;
+}
+
+.admin-shell .text-stone-200,
+.admin-shell .text-gray-200 {
+  color: #c7cbcc !important;
+}
+
+/* ------------------------------------------------------------
+   Borders
+   ------------------------------------------------------------ */
+
+.admin-shell .border-stone-100 {
+  border-color: #ecedeb !important;
+}
+
+.admin-shell .border-stone-200,
+.admin-shell .border-gray-200 {
+  border-color: #dcdcdc !important;
+}
+
+.admin-shell .border-stone-300,
+.admin-shell .border-gray-300 {
+  border-color: #c7c9ca !important;
+}
+
+.admin-shell .border-stone-200\/60 {
+  border-color: rgba(220, 220, 220, 0.6) !important;
+}
+
+.admin-shell .border-stone-200\/80 {
+  border-color: rgba(220, 220, 220, 0.8) !important;
+}
+
+.admin-shell .divide-stone-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #ecedeb !important;
+}
+
+.admin-shell .divide-stone-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #dcdcdc !important;
+}
+
+/* ------------------------------------------------------------
+   Hover states
+   ------------------------------------------------------------ */
+
+.admin-shell .hover\:bg-stone-50:hover,
+.admin-shell .hover\:bg-gray-50:hover {
+  background-color: #f7f7f5 !important;
+}
+
+.admin-shell .hover\:bg-stone-100:hover,
+.admin-shell .hover\:bg-gray-100:hover {
+  background-color: #f1f1ef !important;
+}
+
+.admin-shell .hover\:bg-stone-50\/50:hover {
+  background-color: #f1f1ef !important;
+}
+
+.admin-shell .hover\:text-stone-900:hover {
+  color: #f72585 !important;
+}
+
+.admin-shell .hover\:border-stone-200:hover {
+  border-color: #f72585 !important;
+}
+
+.admin-shell .shadow-stone-200\/50 {
+  --tw-shadow-color: rgba(11, 13, 14, 0.15) !important;
+}
+
+/* ------------------------------------------------------------
+   Primary buttons
+   ------------------------------------------------------------ */
+
+.admin-shell .admin-primary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  border: 1px solid var(--tz-pink);
+  background: var(--tz-pink);
+  color: #ffffff !important;
+
+  font-weight: 700;
+
+  box-shadow: 0 12px 26px -16px rgba(247, 37, 133, 0.75);
+
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.admin-shell .admin-primary-action:hover:not(:disabled) {
+  background: var(--tz-pink-dark);
+  border-color: var(--tz-pink-dark);
+
+  box-shadow: 0 16px 32px -18px rgba(247, 37, 133, 0.9);
+
+  transform: translateY(-1px);
+}
+
+.admin-shell .admin-primary-action:focus-visible {
+  outline: 2px solid var(--tz-pink);
+  outline-offset: 2px;
+}
+
+.admin-shell .admin-primary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+  transform: none;
+}
+
+.admin-shell .admin-primary-action svg,
+.admin-shell .admin-primary-action span {
+  color: inherit !important;
+}
+
+/* ------------------------------------------------------------
+   Dark buttons
+   ------------------------------------------------------------ */
+
+.admin-shell .bg-stone-900 {
+  background-color: #0b0d0e !important;
+}
+
+.admin-shell .bg-stone-900.text-white,
+.admin-shell .bg-stone-900 .text-white {
+  color: #ffffff !important;
+}
+
+.admin-shell .hover\:bg-stone-800:hover {
+  background-color: #1a1e20 !important;
+}
+
+/* ------------------------------------------------------------
+   Indigo -> Pink
+   ------------------------------------------------------------ */
+
+.admin-shell .bg-indigo-600,
+.admin-shell .bg-indigo-700 {
+  background-color: #f72585 !important;
+}
+
+.admin-shell .bg-indigo-600.text-white,
+.admin-shell .bg-indigo-600 .text-white,
+.admin-shell .bg-indigo-700.text-white,
+.admin-shell .bg-indigo-700 .text-white {
+  color: #ffffff !important;
+}
+
+.admin-shell .hover\:bg-indigo-600:hover,
+.admin-shell .hover\:bg-indigo-700:hover {
+  background-color: #d91668 !important;
+}
+
+/* ------------------------------------------------------------
+   Destructive buttons
+   ------------------------------------------------------------ */
+
+.admin-shell .bg-red-600 {
+  background-color: #dc2626 !important;
+}
+
+.admin-shell .bg-red-700 {
+  background-color: #b91c1c !important;
+}
+
+.admin-shell .hover\:bg-red-600:hover,
+.admin-shell .hover\:bg-red-700:hover {
+  background-color: #991b1b !important;
+}
+
+.admin-shell .bg-red-600.text-white,
+.admin-shell .bg-red-600 .text-white,
+.admin-shell .bg-red-700.text-white,
+.admin-shell .bg-red-700 .text-white {
+  color: #ffffff !important;
+}
+
+/* ------------------------------------------------------------
+   Gradient buttons -> TeenZos gradient
+   ------------------------------------------------------------ */
+
+.admin-shell .from-orange-500 {
+  --tw-gradient-from: #f72585 !important;
+}
+
+.admin-shell .to-orange-500,
+.admin-shell .to-orange-600 {
+  --tw-gradient-to: #36b8c5 !important;
+}
+
+.admin-shell .from-blue-500 {
+  --tw-gradient-from: #36b8c5 !important;
+}
+
+.admin-shell .to-indigo-500 {
+  --tw-gradient-to: #f72585 !important;
+}
+
+.admin-shell .from-emerald-500 {
+  --tw-gradient-from: #36b8c5 !important;
+}
+
+.admin-shell .to-teal-500 {
+  --tw-gradient-to: #218d98 !important;
+}
+
+.admin-shell .from-violet-500 {
+  --tw-gradient-from: #f72585 !important;
+}
+
+.admin-shell .to-purple-500 {
+  --tw-gradient-to: #d91668 !important;
+}
+
+.admin-shell .from-teal-700 {
+  --tw-gradient-from: #218d98 !important;
+}
+
+.admin-shell .to-teal-800 {
+  --tw-gradient-to: #0f6871 !important;
+}
+
+.admin-shell .hover\:from-teal-800:hover {
+  --tw-gradient-from: #0f6871 !important;
+}
+
+.admin-shell .hover\:to-teal-800:hover {
+  --tw-gradient-to: #218d98 !important;
+}
+
+.admin-shell .from-orange-500.text-white,
+.admin-shell .from-orange-500 .text-white,
+.admin-shell .from-teal-700.text-white,
+.admin-shell .from-teal-700 .text-white {
+  color: #ffffff !important;
+}
+
+/* ------------------------------------------------------------
+   Orange -> Pink
+   ------------------------------------------------------------ */
+
+.admin-shell .bg-orange-50 {
+  background-color: rgba(247, 37, 133, 0.06) !important;
+}
+
+.admin-shell .bg-orange-100 {
+  background-color: rgba(247, 37, 133, 0.12) !important;
+}
+
+.admin-shell .bg-orange-600 {
+  background-color: #f72585 !important;
+}
+
+.admin-shell .text-orange-500,
+.admin-shell .text-orange-600 {
+  color: #f72585 !important;
+}
+
+.admin-shell .text-orange-700 {
+  color: #d91668 !important;
+}
+
+.admin-shell .border-orange-200 {
+  border-color: rgba(247, 37, 133, 0.25) !important;
+}
+
+.admin-shell .border-orange-500 {
+  border-color: #f72585 !important;
+}
+
+.admin-shell .ring-orange-500 {
+  --tw-ring-color: #f72585 !important;
+}
+
+.admin-shell .ring-orange-500\/40 {
+  --tw-ring-color: rgba(247, 37, 133, 0.4) !important;
+}
+
+.admin-shell .focus\:ring-orange-600:focus {
+  --tw-ring-color: #f72585 !important;
+}
+
+.admin-shell .shadow-orange-500\/20 {
+  --tw-shadow-color: rgba(247, 37, 133, 0.2) !important;
+}
+
+/* ------------------------------------------------------------
+   Indigo -> Pink
+   ------------------------------------------------------------ */
+
+.admin-shell .bg-indigo-50 {
+  background-color: rgba(247, 37, 133, 0.06) !important;
+}
+
+.admin-shell .bg-indigo-100 {
+  background-color: rgba(247, 37, 133, 0.12) !important;
+}
+
+.admin-shell .text-indigo-700 {
+  color: #d91668 !important;
+}
+
+.admin-shell .text-indigo-900 {
+  color: #111315 !important;
+}
+
+.admin-shell .border-indigo-500 {
+  border-color: #f72585 !important;
+}
+
+.admin-shell .ring-indigo-500 {
+  --tw-ring-color: #f72585 !important;
+}
+
+/* ------------------------------------------------------------
+   Teal / Emerald -> Cyan
+   ------------------------------------------------------------ */
+
+.admin-shell .border-teal-700 {
+  border-color: #36b8c5 !important;
+}
+
+.admin-shell .ring-teal-700\/30 {
+  --tw-ring-color: rgba(54, 184, 197, 0.3) !important;
+}
+
+.admin-shell .ring-teal-700\/40 {
+  --tw-ring-color: rgba(54, 184, 197, 0.4) !important;
+}
+
+.admin-shell .ring-emerald-500\/20 {
+  --tw-ring-color: rgba(54, 184, 197, 0.2) !important;
+}
+
+.admin-shell .border-emerald {
+  border-color: #36b8c5 !important;
+}
+
+/* ------------------------------------------------------------
+   Status chips
+   ------------------------------------------------------------ */
+
+.admin-shell .bg-green-50 {
+  background-color: rgba(54, 184, 197, 0.06) !important;
+}
+
+.admin-shell .bg-green-100 {
+  background-color: rgba(54, 184, 197, 0.12) !important;
+}
+
+.admin-shell .text-green-600 {
+  color: #218d98 !important;
+}
+
+.admin-shell .text-green-700 {
+  color: #218d98 !important;
+}
+
+.admin-shell .border-green-200 {
+  border-color: rgba(54, 184, 197, 0.25) !important;
+}
+
+/* ------------------------------------------------------------
+   Red status
+   ------------------------------------------------------------ */
+
+.admin-shell .bg-red-50 {
+  background-color: rgba(220, 38, 38, 0.06) !important;
+}
+
+.admin-shell .bg-red-100 {
+  background-color: rgba(220, 38, 38, 0.12) !important;
+}
+
+.admin-shell .text-red-500 {
+  color: #dc2626 !important;
+}
+
+.admin-shell .text-red-600 {
+  color: #dc2626 !important;
+}
+
+.admin-shell .text-red-700 {
+  color: #b91c1c !important;
+}
+
+.admin-shell .border-red-200 {
+  border-color: rgba(220, 38, 38, 0.25) !important;
+}
+
+/* ------------------------------------------------------------
+   Yellow / Amber -> Orange
+   ------------------------------------------------------------ */
+
+.admin-shell .bg-yellow-100,
+.admin-shell .bg-amber-100 {
+  background-color: rgba(244, 123, 32, 0.12) !important;
+}
+
+.admin-shell .text-yellow-700,
+.admin-shell .text-amber-700 {
+  color: #d85e0b !important;
+}
+
+/* ------------------------------------------------------------
+   Blue -> Cyan
+   ------------------------------------------------------------ */
+
+.admin-shell .bg-blue-100 {
+  background-color: rgba(54, 184, 197, 0.12) !important;
+}
+
+.admin-shell .text-blue-500,
+.admin-shell .text-blue-700 {
+  color: #218d98 !important;
+}
+
+/* ------------------------------------------------------------
+   Form controls
+   ------------------------------------------------------------ */
+
+.admin-shell input,
+.admin-shell select,
+.admin-shell textarea {
+  background-color: #ffffff;
+  color: #111315;
+  border-color: #dcdcdc;
+}
+
+.admin-shell input[type="checkbox"],
+.admin-shell input[type="radio"] {
+  accent-color: #f72585;
+}
+
+.admin-shell input::placeholder,
+.admin-shell textarea::placeholder {
+  color: #858b8e;
+}
+
+.admin-shell select option {
+  background-color: #ffffff;
+  color: #111315;
+}
+
+/* ------------------------------------------------------------
+   Ring offset
+   ------------------------------------------------------------ */
+
+.admin-shell [class*="ring-offset-"] {
+  --tw-ring-offset-color: #ffffff !important;
+}
+
+/* ------------------------------------------------------------
+   Toggle knobs
+   ------------------------------------------------------------ */
+
+.admin-shell .rounded-full.bg-white {
+  background-color: #ffffff !important;
+}
+
+/* ============================================================
+   MOBILE
+   ============================================================ */
+
+@media (max-width: 640px) {
+  .section-heading {
+    font-size: clamp(2rem, 12vw, 3rem);
+  }
+
+  .eyebrow {
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+  }
+}
+
+/* ============================================================
+   TOAST NOTIFICATION ANIMATIONS
+   ============================================================ */
+
+@keyframes toastSlideDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-toast-enter {
+  animation: toastSlideDown 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ============================================================
+   CART DRAWER ANIMATIONS
+   ============================================================ */
+
+@keyframes drawerSlideLeft {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.animate-drawer-slide-left {
+  animation: drawerSlideLeft 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
