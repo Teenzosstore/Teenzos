@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import Image from 'next/image'
 import { Check, Image as ImageIcon, Loader2, Upload } from 'lucide-react'
-import { CldUploadWidget } from 'next-cloudinary'
+import { ImageKitUploadWidget } from '@/components/ImageKitUploadWidget'
 import {
   updateOversizedSectionSettings,
   type OversizedSectionSettings,
@@ -24,7 +24,7 @@ export function OversizedSectionForm({
   }
 
   const handleUploadSuccess = (result: any) => {
-    const imageUrl = result.info.secure_url
+    const imageUrl = (result.url || result.info?.secure_url)
     updateField('background_image_url', imageUrl)
   }
 
@@ -58,11 +58,9 @@ export function OversizedSectionForm({
             />
           </div>
 
-          <CldUploadWidget
-            signatureEndpoint="/api/cloudinary/sign"
+          <ImageKitUploadWidget
             options={{
               maxFiles: 1,
-              resourceType: 'image',
               folder: "rawflex/oversized",
               clientAllowedFormats: ['jpg', 'jpeg', 'png', 'webp'],
             }}
@@ -79,7 +77,7 @@ export function OversizedSectionForm({
                 Change Background Image
               </button>
             )}
-          </CldUploadWidget>
+          </ImageKitUploadWidget>
 
           <label className="mt-4 block text-xs font-semibold text-ink/60 mb-1">
             Background Image URL

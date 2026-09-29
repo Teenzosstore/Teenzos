@@ -3,9 +3,10 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { Star } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
-import { ShopProduct } from "@/lib/shopProducts";
+import { ShopProduct, slugify } from "@/lib/shopProducts";
 
 interface ShopProductCardProps {
   product: ShopProduct;
@@ -26,22 +27,31 @@ export default function ShopProductCard({
   const [isAdded, setIsAdded] = useState(false);
   const [imgSrc, setImgSrc] = useState(product.image_url);
 
+  const productSlug = product.slug || slugify(product.name) || product.id;
+  const productHref = `/shop/${productSlug}`;
+
   const activeColor = product.colors?.[selectedColorIdx]?.name || "Standard";
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    addToCart({
-      id: product.id,
-      name: `${product.name} (${activeColor})`,
-      price: product.price,
-      image_url: product.image_url,
-      category_name: product.category_name,
-    });
+    addToCart(
+      {
+        id: product.id,
+        name: `${product.name} (${activeColor})`,
+        price: product.price,
+        image_url: product.image_url,
+        category_name: product.category_name,
+      },
+      {
+        event: e,
+        sourceElement: e.currentTarget as HTMLElement,
+      }
+    );
 
     setIsAdded(true);
-    setTimeout(() => setIsAdded(false), 1200);
+    setTimeout(() => setIsAdded(false), 1400);
 
     showToast(`Added ${product.name} (${activeColor}) to bag!`, "success");
   };
@@ -66,7 +76,7 @@ export default function ShopProductCard({
       <div className="group relative flex flex-col sm:flex-row items-center gap-4 sm:gap-6 bg-white rounded-[5px] border border-stone-200/90 p-3 sm:p-4 hover:border-stone-400 hover:shadow-xl transition-all duration-300">
         {/* List Image Box */}
         <div className="relative aspect-[3.5/4.3] w-full sm:w-44 shrink-0 rounded-[5px] bg-[#F7F7F5] border border-stone-200/60 overflow-hidden  flex items-center justify-center">
-          <Link href={`/shop/${product.id}`} className="block relative w-full h-full">
+          <Link href={productHref} className="block relative w-full h-full">
             <Image
               src={imgSrc}
               alt={product.name}
@@ -80,7 +90,25 @@ export default function ShopProductCard({
 
           {/* Badge */}
           {product.badge && (
-            <span className="absolute top-2 left-2 z-10 bg-[#F72585] text-white text-[10px] font-bold px-2 py-0.5 rounded-[3px] uppercase tracking-wider shadow-sm">
+            <span
+              className={`absolute top-2 left-2 z-10 text-[10px] font-extrabold px-2 py-0.5 rounded-[3px] uppercase tracking-wider shadow-sm ${
+                product.badge.toUpperCase() === "HOT" ||
+                product.badge.toUpperCase() === "HOT BESTSELLER" ||
+                product.badge.toUpperCase() === "BESTSELLER"
+                  ? "bg-[#F47B20] text-white"
+                  : product.badge.toUpperCase() === "NEW" ||
+                    product.badge.toUpperCase() === "NEW ARRIVALS" ||
+                    product.badge.toUpperCase() === "NEW ARRIVAL"
+                  ? "bg-[#F72585] text-white"
+                  : product.badge.toUpperCase() === "TRENDING"
+                  ? "bg-[#36B8C5] text-white"
+                  : product.badge.toUpperCase() === "EXCLUSIVE" ||
+                    product.badge.toUpperCase() === "LIMITED" ||
+                    product.badge.toUpperCase() === "LIMITED EDITION"
+                  ? "bg-[#9333EA] text-white"
+                  : "bg-[#0B0D0E] text-white"
+              }`}
+            >
               {product.badge}
             </span>
           )}
@@ -113,7 +141,7 @@ export default function ShopProductCard({
             </span>
 
             <Link
-              href={`/shop/${product.id}`}
+              href={productHref}
               className="block font-body font-semibold text-[#0B0D0E] text-base sm:text-lg hover:text-[#F72585] transition-colors line-clamp-1 mt-0.5"
             >
               {product.name}
@@ -200,7 +228,7 @@ export default function ShopProductCard({
     >
       {/* ── Image Box with rounded-[5px] ── */}
       <div className="relative aspect-[4/4.3] w-full rounded-[5px] bg-[#F7F7F5] border border-stone-200/60 overflow-hidden mb-2.5 sm:mb-3 flex items-center justify-center">
-        <Link href={`/shop/${product.id}`} className="block relative w-full h-full">
+        <Link href={productHref} className="block relative w-full h-full">
           <Image
             src={imgSrc}
             alt={product.name}
@@ -216,12 +244,20 @@ export default function ShopProductCard({
         {product.badge && (
           <span
             className={`absolute top-2 left-2 z-10 text-[9px] sm:text-[10px] font-extrabold px-1.5 sm:px-2 py-0.5 rounded-[3px] uppercase tracking-wider shadow-sm ${
-              product.badge.toUpperCase() === "HOT"
+              product.badge.toUpperCase() === "HOT" ||
+              product.badge.toUpperCase() === "HOT BESTSELLER" ||
+              product.badge.toUpperCase() === "BESTSELLER"
+                ? "bg-[#F47B20] text-white"
+                : product.badge.toUpperCase() === "NEW" ||
+                  product.badge.toUpperCase() === "NEW ARRIVALS" ||
+                  product.badge.toUpperCase() === "NEW ARRIVAL"
                 ? "bg-[#F72585] text-white"
                 : product.badge.toUpperCase() === "TRENDING"
                 ? "bg-[#36B8C5] text-white"
-                : product.badge.toUpperCase() === "EXCLUSIVE"
-                ? "bg-[#9B51E0] text-white"
+                : product.badge.toUpperCase() === "EXCLUSIVE" ||
+                  product.badge.toUpperCase() === "LIMITED" ||
+                  product.badge.toUpperCase() === "LIMITED EDITION"
+                ? "bg-[#9333EA] text-white"
                 : "bg-[#0B0D0E] text-white"
             }`}
           >
@@ -252,14 +288,37 @@ export default function ShopProductCard({
       {/* ── Product Info & Bottom Actions ── */}
       <div className="flex flex-col flex-grow justify-between px-0.5">
         <div>
-          {/* Category Tag */}
-          <span className="block text-[10px] sm:text-[10.5px] font-extrabold text-[#F72585] uppercase tracking-wider mb-0.5">
-            {product.category_name}
-          </span>
+          {/* Category & 5 Stars with (Review Count) */}
+          <div className="flex items-center justify-between gap-1 mb-1">
+            <span className="text-[10px] sm:text-[10.5px] font-extrabold text-[#F72585] uppercase tracking-wider">
+              {product.category_name || "Streetwear"}
+            </span>
+            <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center gap-0.5">
+                {[...Array(5)].map((_, i) => {
+                  const cardReviewCount = Number(product.review_count) || 0
+                  const cardRating = cardReviewCount > 0 && Number(product.rating) > 0 ? Number(product.rating) : 5
+                  return (
+                    <Star
+                      key={i}
+                      className={`w-2.5 h-2.5 sm:w-3 sm:h-3 ${
+                        i < Math.round(cardRating)
+                          ? "fill-[#F59E0B] text-[#F59E0B]"
+                          : "fill-stone-200 text-stone-200"
+                      }`}
+                    />
+                  )
+                })}
+              </div>
+              <span className="text-[10.5px] sm:text-[11px] text-stone-500 font-bold leading-none">
+                ({Number(product.review_count) || 0})
+              </span>
+            </div>
+          </div>
 
           {/* Name */}
           <Link
-            href={`/shop/${product.id}`}
+            href={productHref}
             className="font-body font-semibold text-[#0B0D0E] text-[12.5px] sm:text-[14px] md:text-[15px] leading-snug line-clamp-1 hover:text-[#F72585] transition-colors"
           >
             {product.name}

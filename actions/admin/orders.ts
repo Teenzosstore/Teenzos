@@ -106,3 +106,21 @@ export async function updateDeliveryTracking(
   revalidateOrderPaths(orderId)
   return { success: true }
 }
+
+export async function deleteOrder(orderId: string) {
+  const admin = await requireAdmin()
+  if (admin.ok === false) return { success: false, error: admin.error }
+
+  const { error } = await admin.adminClient
+    .from('orders')
+    .delete()
+    .eq('id', orderId)
+
+  if (error) return { success: false, error: error.message }
+
+  revalidatePath('/admin/orders')
+  revalidatePath(`/admin/orders/${orderId}`)
+  revalidatePath('/profile')
+  return { success: true }
+}
+

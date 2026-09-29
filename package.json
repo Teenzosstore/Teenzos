@@ -6,19 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "emulators:auth": "node scripts/startFirebaseAuthEmulator.js",
-    "emulators:auth:npx": "node scripts/startFirebaseAuthEmulator.js"
+    "lint": "next lint"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.115.0",
-    "cloudinary": "^2.10.0",
-    "firebase": "^12.18.0",
-    "firebase-admin": "^14.3.0",
+    "imagekit": "^6.0.0",
     "lucide-react": "^0.395.0",
     "next": "^16.2.10",
-    "next-cloudinary": "^6.17.5",
     "pg": "^8.22.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

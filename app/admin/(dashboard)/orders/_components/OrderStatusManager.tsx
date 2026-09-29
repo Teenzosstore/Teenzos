@@ -1,21 +1,40 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
-import { updateDeliveryTracking, updateOrderStatus, updatePaymentStatus } from '@/actions/admin/orders'
-import { assignShiprocketAwbToOrder, createShiprocketShipment, scheduleShiprocketPickupForOrder } from '@/actions/admin/shiprocket'
-import { Check, Loader2, PackageCheck, Truck } from 'lucide-react'
+import {
+  updateDeliveryTracking,
+  updateOrderStatus,
+  updatePaymentStatus,
+  deleteOrder,
+} from '@/actions/admin/orders'
+import {
+  assignShiprocketAwbToOrder,
+  createShiprocketShipment,
+  scheduleShiprocketPickupForOrder,
+} from '@/actions/admin/shiprocket'
+import {
+  Check,
+  Loader2,
+  PackageCheck,
+  Truck,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
+} from 'lucide-react'
 
 const ORDER_STATUSES = ['pending', 'processing', 'shipped', 'delivered', 'cancelled']
 const PAYMENT_STATUSES = ['pending', 'paid', 'failed', 'refunded']
 
-export function OrderStatusManager({ 
-  orderId, 
-  initialOrderStatus, 
+export function OrderStatusManager({
+  orderId,
+  initialOrderStatus,
   initialPaymentStatus,
   initialTracking,
   initialShiprocket,
-}: { 
+}: {
   orderId: string
   initialOrderStatus: string
   initialPaymentStatus: string
@@ -38,12 +57,33 @@ export function OrderStatusManager({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [courierId, setCourierId] = useState('')
+  const [showShiprocket, setShowShiprocket] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (showDeleteConfirm) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [showDeleteConfirm])
+
   const [parcel, setParcel] = useState({
     length: '10',
     breadth: '10',
     height: '10',
     weight: '0.5',
   })
+
   const [tracking, setTracking] = useState({
     courier_name: initialTracking?.courier_name || '',
     tracking_number: initialTracking?.tracking_number || '',
@@ -54,11 +94,12 @@ export function OrderStatusManager({
   const handleStatusChange = (type: 'order' | 'payment', value: string) => {
     setError(null)
     setSuccess(false)
-    
+
     startTransition(async () => {
-      const result = type === 'order' 
-        ? await updateOrderStatus(orderId, value)
-        : await updatePaymentStatus(orderId, value)
+      const result =
+        type === 'order'
+          ? await updateOrderStatus(orderId, value)
+          : await updatePaymentStatus(orderId, value)
 
       if (result.error) {
         setError(result.error)
@@ -143,104 +184,106 @@ export function OrderStatusManager({
     })
   }
 
+  const handleConfirmDelete = async () => {
+    setIsDeleting(true)
+    const result = await deleteOrder(orderId)
+    setIsDeleting(false)
+
+    if (result.error) {
+      setError(result.error)
+      setShowDeleteConfirm(false)
+    } else {
+      router.push('/admin/orders')
+      router.refresh()
+    }
+  }
+
   return (
-    <div className="bg-panel rounded-2xl shadow-sm border border-cream-line p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-bold text-ink">Manage Status</h3>
-        {isPending && <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />}
-        {success && !isPending && <Check className="w-5 h-5 text-green-500" />}
+    <div className="bg-panel rounded-2xl shadow-sm border border-cream-line p-4 sm:p-5 space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between pb-3 border-b border-cream-line/70">
+        <div className="flex items-center gap-2">
+          <Truck className="w-4 h-4 text-emerald" />
+          <h3 className="text-sm font-bold text-ink">Manage Status & Dispatch</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          {isPending && <Loader2 className="w-4 h-4 text-pink animate-spin" />}
+          {success && !isPending && <Check className="w-4 h-4 text-emerald" />}
+          <button
+            type="button"
+            onClick={() => setShowDeleteConfirm(true)}
+            className="text-xs font-semibold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100/80 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1"
+          >
+            <Trash2 className="w-3 h-3" />
+            <span>Delete</span>
+          </button>
+        </div>
       </div>
 
       {error && (
-        <div className="p-3 bg-red-50 text-red-700 text-sm rounded-xl">
+        <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl font-medium">
           {error}
         </div>
       )}
 
-      <div>
-        <label className="block text-sm font-semibold text-ink/80 mb-2">
-          Order Status
-        </label>
-        <select
-          disabled={isPending}
-          defaultValue={initialOrderStatus}
-          onChange={(e) => handleStatusChange('order', e.target.value)}
-          className="w-full bg-cream-deep border border-cream-line rounded-xl px-4 py-2.5 text-sm font-medium text-ink/80 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all capitalize"
-        >
-          {ORDER_STATUSES.map(s => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <label className="block text-sm font-semibold text-ink/80 mb-2">
-          Payment Status
-        </label>
-        <select
-          disabled={isPending}
-          defaultValue={initialPaymentStatus}
-          onChange={(e) => handleStatusChange('payment', e.target.value)}
-          className="w-full bg-cream-deep border border-cream-line rounded-xl px-4 py-2.5 text-sm font-medium text-ink/80 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all capitalize"
-        >
-          {PAYMENT_STATUSES.map(s => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-      </div>
-
-      <div className="border-t border-cream-line pt-5 space-y-4">
-        <h4 className="text-sm font-bold text-ink uppercase tracking-wide">Delivery Tracking</h4>
+      {/* Quick Status Selectors (Compact Row) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-ink/60 mb-1">
+            Order Status
+          </label>
+          <select
+            disabled={isPending}
+            defaultValue={initialOrderStatus}
+            onChange={(e) => handleStatusChange('order', e.target.value)}
+            className="w-full bg-cream-deep border border-cream-line rounded-[5px] px-3 py-1.5 text-xs font-semibold text-ink focus:outline-none focus:border-pink transition-all capitalize"
+          >
+            {ORDER_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <div>
-          <label className="block text-sm font-semibold text-ink/80 mb-2">
-            Courier
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-ink/60 mb-1">
+            Payment Status
           </label>
+          <select
+            disabled={isPending}
+            defaultValue={initialPaymentStatus}
+            onChange={(e) => handleStatusChange('payment', e.target.value)}
+            className="w-full bg-cream-deep border border-cream-line rounded-[5px] px-3 py-1.5 text-xs font-semibold text-ink focus:outline-none focus:border-pink transition-all capitalize"
+          >
+            {PAYMENT_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Courier & Tracking Inputs (Compact Row) */}
+      <div className="space-y-2 pt-1 border-t border-cream-line/70">
+        <label className="block text-[11px] font-bold uppercase tracking-wider text-ink/60">
+          Courier & Tracking (AWB)
+        </label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 my-4">
           <input
             disabled={isPending}
             value={tracking.courier_name}
-            onChange={(event) => setTracking((prev) => ({ ...prev, courier_name: event.target.value }))}
-            className="w-full bg-cream-deep border border-cream-line rounded-xl px-4 py-2.5 text-sm font-medium text-ink/80 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-            placeholder="Delhivery, Blue Dart, Shiprocket..."
+            onChange={(e) => setTracking((prev) => ({ ...prev, courier_name: e.target.value }))}
+            className="w-full bg-cream-deep border border-cream-line rounded-[5px] px-3 py-1.5 text-xs text-ink placeholder:text-ink/40 focus:outline-none focus:border-pink"
+            placeholder="Courier (e.g. Delhivery)"
           />
-        </div>
-
-        <div>
-          <label className="block text-sm font-semibold text-ink/80 mb-2">
-            Tracking Number
-          </label>
           <input
             disabled={isPending}
             value={tracking.tracking_number}
-            onChange={(event) => setTracking((prev) => ({ ...prev, tracking_number: event.target.value }))}
-            className="w-full bg-cream-deep border border-cream-line rounded-xl px-4 py-2.5 text-sm font-medium text-ink/80 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-            placeholder="AWB / tracking id"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-semibold text-ink/80 mb-2">
-            Tracking URL
-          </label>
-          <input
-            disabled={isPending}
-            value={tracking.tracking_url}
-            onChange={(event) => setTracking((prev) => ({ ...prev, tracking_url: event.target.value }))}
-            className="w-full bg-cream-deep border border-cream-line rounded-xl px-4 py-2.5 text-sm font-medium text-ink/80 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-            placeholder="https://..."
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-semibold text-ink/80 mb-2">
-            Shipment Notes
-          </label>
-          <textarea
-            disabled={isPending}
-            value={tracking.shipment_notes}
-            onChange={(event) => setTracking((prev) => ({ ...prev, shipment_notes: event.target.value }))}
-            className="min-h-24 w-full bg-cream-deep border border-cream-line rounded-xl px-4 py-2.5 text-sm font-medium text-ink/80 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-            placeholder="Packed, handed to courier, delivery exception..."
+            onChange={(e) => setTracking((prev) => ({ ...prev, tracking_number: e.target.value }))}
+            className="w-full bg-cream-deep border border-cream-line rounded-[5px] px-3 py-1.5 text-xs text-ink placeholder:text-ink/40 focus:outline-none focus:border-pink"
+            placeholder="AWB / Tracking #"
           />
         </div>
 
@@ -248,131 +291,134 @@ export function OrderStatusManager({
           type="button"
           disabled={isPending}
           onClick={handleTrackingSave}
-          className="w-full rounded-xl bg-ink px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-orange-600 disabled:opacity-50"
+          className="w-full py-1.5 bg-black hover:bg-pink-light text-white rounded-[5px] text-xs font-bold transition-all shadow-2xs disabled:opacity-50 flex items-center justify-center gap-1.5 duration-200 cursor-pointer"
         >
-          Save Tracking
+          {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Save Courier & AWB'}
         </button>
       </div>
 
-      <div className="border-t border-cream-line pt-5 space-y-4">
-        <div className="flex items-center gap-2">
-          <Truck className="h-4 w-4 text-ink/50" />
-          <h4 className="text-sm font-bold text-ink uppercase tracking-wide">Shiprocket</h4>
-        </div>
-
-        {(initialShiprocket?.shiprocket_order_id || initialShiprocket?.shiprocket_shipment_id || initialShiprocket?.shiprocket_awb_code) && (
-          <div className="space-y-2 rounded-xl bg-cream-deep p-3 text-xs text-ink/70">
-            {initialShiprocket?.shiprocket_order_id && (
-              <p><span className="font-bold text-ink">Order:</span> {initialShiprocket.shiprocket_order_id}</p>
-            )}
-            {initialShiprocket?.shiprocket_shipment_id && (
-              <p><span className="font-bold text-ink">Shipment:</span> {initialShiprocket.shiprocket_shipment_id}</p>
-            )}
-            {initialShiprocket?.shiprocket_awb_code && (
-              <p><span className="font-bold text-ink">AWB:</span> {initialShiprocket.shiprocket_awb_code}</p>
-            )}
-            {initialShiprocket?.shiprocket_pickup_token && (
-              <p><span className="font-bold text-ink">Pickup:</span> {initialShiprocket.shiprocket_pickup_token}</p>
-            )}
-            {initialShiprocket?.shiprocket_pickup_scheduled_date && (
-              <p><span className="font-bold text-ink">Scheduled:</span> {initialShiprocket.shiprocket_pickup_scheduled_date}</p>
-            )}
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-ink/70 mb-1">Length cm</label>
-            <input
-              disabled={isPending}
-              type="number"
-              min="1"
-              step="0.1"
-              value={parcel.length}
-              onChange={(event) => setParcel((prev) => ({ ...prev, length: event.target.value }))}
-              className="w-full bg-cream-deep border border-cream-line rounded-xl px-3 py-2 text-sm font-medium text-ink/80 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-ink/70 mb-1">Breadth cm</label>
-            <input
-              disabled={isPending}
-              type="number"
-              min="1"
-              step="0.1"
-              value={parcel.breadth}
-              onChange={(event) => setParcel((prev) => ({ ...prev, breadth: event.target.value }))}
-              className="w-full bg-cream-deep border border-cream-line rounded-xl px-3 py-2 text-sm font-medium text-ink/80 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-ink/70 mb-1">Height cm</label>
-            <input
-              disabled={isPending}
-              type="number"
-              min="1"
-              step="0.1"
-              value={parcel.height}
-              onChange={(event) => setParcel((prev) => ({ ...prev, height: event.target.value }))}
-              className="w-full bg-cream-deep border border-cream-line rounded-xl px-3 py-2 text-sm font-medium text-ink/80 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-ink/70 mb-1">Weight kg</label>
-            <input
-              disabled={isPending}
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={parcel.weight}
-              onChange={(event) => setParcel((prev) => ({ ...prev, weight: event.target.value }))}
-              className="w-full bg-cream-deep border border-cream-line rounded-xl px-3 py-2 text-sm font-medium text-ink/80 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-            />
-          </div>
-        </div>
-
+      {/* Optional Collapsible Shiprocket Section */}
+      <div className="pt-1 border-t border-cream-line/70">
         <button
           type="button"
-          disabled={isPending || Boolean(initialShiprocket?.shiprocket_shipment_id)}
-          onClick={handleShiprocketCreate}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-orange-600 disabled:opacity-50"
+          onClick={() => setShowShiprocket(!showShiprocket)}
+          className="w-full flex items-center justify-between text-xs font-bold text-ink/70 hover:text-ink py-1 transition-colors"
         >
-          <PackageCheck className="h-4 w-4" />
-          Create Shipment
+          <span className="flex items-center gap-1.5">
+            <PackageCheck className="w-3.5 h-3.5 text-orange-500" />
+            <span>Shiprocket Automation (Optional)</span>
+          </span>
+          {showShiprocket ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         </button>
 
-        <div>
-          <label className="block text-sm font-semibold text-ink/80 mb-2">
-            Courier ID
-          </label>
-          <input
-            disabled={isPending || Boolean(initialShiprocket?.shiprocket_awb_code)}
-            value={courierId}
-            onChange={(event) => setCourierId(event.target.value)}
-            className="w-full bg-cream-deep border border-cream-line rounded-xl px-4 py-2.5 text-sm font-medium text-ink/80 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-            placeholder="Optional if default courier is configured"
-          />
-        </div>
+        {showShiprocket && (
+          <div className="mt-3 p-3 bg-cream-deep/60 rounded-xl border border-cream-line space-y-3 animate-fade-in text-xs">
+            <div className="grid grid-cols-4 gap-1.5 text-center">
+              <div>
+                <span className="text-[10px] text-ink/50 uppercase block">L (cm)</span>
+                <input
+                  value={parcel.length}
+                  onChange={(e) => setParcel((p) => ({ ...p, length: e.target.value }))}
+                  className="w-full p-1 bg-white border border-cream-line rounded text-xs text-center"
+                />
+              </div>
+              <div>
+                <span className="text-[10px] text-ink/50 uppercase block">B (cm)</span>
+                <input
+                  value={parcel.breadth}
+                  onChange={(e) => setParcel((p) => ({ ...p, breadth: e.target.value }))}
+                  className="w-full p-1 bg-white border border-cream-line rounded text-xs text-center"
+                />
+              </div>
+              <div>
+                <span className="text-[10px] text-ink/50 uppercase block">H (cm)</span>
+                <input
+                  value={parcel.height}
+                  onChange={(e) => setParcel((p) => ({ ...p, height: e.target.value }))}
+                  className="w-full p-1 bg-white border border-cream-line rounded text-xs text-center"
+                />
+              </div>
+              <div>
+                <span className="text-[10px] text-ink/50 uppercase block">Wt (kg)</span>
+                <input
+                  value={parcel.weight}
+                  onChange={(e) => setParcel((p) => ({ ...p, weight: e.target.value }))}
+                  className="w-full p-1 bg-white border border-cream-line rounded text-xs text-center"
+                />
+              </div>
+            </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <button
-            type="button"
-            disabled={isPending || !initialShiprocket?.shiprocket_shipment_id || Boolean(initialShiprocket?.shiprocket_awb_code)}
-            onClick={handleShiprocketAwb}
-            className="rounded-xl bg-ink px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-orange-600 disabled:opacity-50"
-          >
-            Assign AWB
-          </button>
-          <button
-            type="button"
-            disabled={isPending || !initialShiprocket?.shiprocket_awb_code || Boolean(initialShiprocket?.shiprocket_pickup_token)}
-            onClick={handleShiprocketPickup}
-            className="rounded-xl bg-ink px-4 py-2.5 text-sm font-bold text-cream transition-colors hover:bg-orange-600 disabled:opacity-50"
-          >
-            Schedule Pickup
-          </button>
-        </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={isPending || Boolean(initialShiprocket?.shiprocket_order_id)}
+                onClick={handleShiprocketCreate}
+                className="flex-1 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-bold text-[11px] disabled:opacity-40"
+              >
+                Create Shipment
+              </button>
+              <button
+                type="button"
+                disabled={isPending || !initialShiprocket?.shiprocket_shipment_id || Boolean(initialShiprocket?.shiprocket_awb_code)}
+                onClick={handleShiprocketAwb}
+                className="flex-1 py-1.5 bg-ink hover:bg-black text-white rounded-lg font-bold text-[11px] disabled:opacity-40"
+              >
+                Assign AWB
+              </button>
+              <button
+                type="button"
+                disabled={isPending || !initialShiprocket?.shiprocket_awb_code || Boolean(initialShiprocket?.shiprocket_pickup_token)}
+                onClick={handleShiprocketPickup}
+                className="flex-1 py-1.5 bg-ink hover:bg-black text-white rounded-lg font-bold text-[11px] disabled:opacity-40"
+              >
+                Schedule Pickup
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {mounted && showDeleteConfirm && createPortal(
+        <div
+          onClick={() => !isDeleting && setShowDeleteConfirm(false)}
+          className="fixed inset-0 z-[999999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-gray-100 text-center space-y-3.5 animate-fade-in"
+          >
+            <div className="w-11 h-11 rounded-xl bg-red-50 text-red-600 flex items-center justify-center mx-auto border border-red-100">
+              <Trash2 className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold text-gray-900">Delete this order?</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                This will permanently delete this order and all items from Supabase. This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 py-2 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl text-xs font-bold disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+                className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-xs"
+              >
+                {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Delete Permanently'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

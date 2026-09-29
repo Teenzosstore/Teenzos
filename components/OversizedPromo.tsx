@@ -88,12 +88,12 @@ export default function OversizedPromo() {
           <div className="lg:col-span-5 flex flex-col justify-center text-left z-10">
             <h2 className="flex flex-col uppercase tracking-tight">
               {/* Line 1: DIFFERENT FITS */}
-              <span className="font-display font-[350] text-white text-3xl sm:text-4xl md:text-5xl lg:text-[56px] xl:text-[66px] leading-[0.88] drop-shadow-md">
+              <span className="font-display font-[300] text-white text-3xl sm:text-4xl md:text-5xl lg:text-[56px] xl:text-[66px] leading-[0.88] drop-shadow-md">
                 DIFFERENT FITS
               </span>
 
               {/* Line 2: SAME ENERGY. */}
-              <span className="font-display font-[350] text-[#36B8C5] text-4xl sm:text-5xl md:text-6xl lg:text-[56px] xl:text-[66px] leading-[0.88] tracking-tight drop-shadow-lg transform -skew-x-6 mt-1.5 sm:mt-4">
+              <span className="font-display font-[300] text-[#36B8C5] text-4xl sm:text-5xl md:text-6xl lg:text-[56px] xl:text-[66px] leading-[0.88] tracking-tight drop-shadow-lg transform -skew-x-6 mt-3 sm:mt-4">
                 SAME ENERGY.
               </span>
             </h2>
@@ -162,7 +162,7 @@ export default function OversizedPromo() {
             </div>
 
             {/* Handwritten Statement: A BIGGER YOU */}
-            <div className="transform -rotate-6 my-2">
+            <div className="hidden lg:block transform -rotate-6 my-2">
               <p
                 className="font-display font-black text-white text-2xl sm:text-3xl lg:text-3xl xl:text-4xl leading-[1.50] tracking-wide uppercase drop-shadow-lg"
               >
@@ -171,6 +171,16 @@ export default function OversizedPromo() {
                 <span className="block">YOU</span>
               </p>
             </div>
+
+            {/* Handwritten Statement for Mobile Only */}
+            
+            <p
+                className="lg:hidden font-display font-[290] text-white text-xl sm:text-2xl lg:text-3xl xl:text-4xl leading-[1.50] tracking-[0.20em] uppercase drop-shadow-lg"
+              >
+                <span className="inline text-[#F72585]">A</span> -  
+                <span className="inline">BIGGER</span> -  
+                <span className="inline">YOU</span>
+              </p>
 
             {/* Bottom Double Streak Accent */}
             <div className="mt-3 transform -rotate-3">

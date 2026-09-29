@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   SHOP_CATEGORIES,
-  SHOP_PRODUCTS,
   ShopProduct,
   ShopCategory,
   productMatchesCategory,
@@ -13,7 +12,11 @@ import ShopSidebarFilter from "./ShopSidebarFilter";
 import ShopProductCard from "./ShopProductCard";
 import ShopToolbar from "./ShopToolbar";
 import ShopMobileDrawer from "./ShopMobileDrawer";
-import { SlidersHorizontal } from "lucide-react";
+import PageLoader from "@/components/PageLoader";
+import { SlidersHorizontal, ChevronLeft, ChevronRight } from "lucide-react";
+import { useToast } from "@/context/ToastContext";
+
+const PRODUCTS_PER_PAGE = 12;
 
 interface ShopGridProps {
   initialProducts?: any[];
@@ -39,19 +42,14 @@ export default function ShopGrid({
 }: ShopGridProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { showToast } = useToast();
 
   // Combine initial DB products with our rich catalogue of homepage & mockup streetwear products
   const allCatalogueProducts: ShopProduct[] = useMemo(() => {
     const existingIds = new Set<string>();
     const list: ShopProduct[] = [];
 
-    // First add rich shop products (from home page & streetwear mockup)
-    SHOP_PRODUCTS.forEach((p) => {
-      existingIds.add(p.id);
-      list.push(p);
-    });
-
-    // If initialProducts from DB exist and aren't already included, add them
+    // 1. First add real DB products (so newly created / edited products appear first and override any mockup)
     if (Array.isArray(initialProducts) && initialProducts.length > 0) {
       initialProducts.forEach((p) => {
         if (!existingIds.has(p.id) && p.is_active !== false) {
@@ -66,14 +64,14 @@ export default function ShopGrid({
               categories.find((c) => c.id === p.category_id)?.name ||
               "Collection",
             price: Number(p.price || 999),
-            oldPrice: Number(p.oldPrice || p.price ? p.price * 1.25 : 1299),
+            oldPrice: Number(p.oldPrice || (p.price ? p.price * 1.25 : 1299)),
             discount: p.oldPrice
               ? `${Math.round(((p.oldPrice - p.price) / p.oldPrice) * 100)}% OFF`
               : "20% OFF",
             image_url: p.image_url || "/image.png",
-            badge: p.badge || "New",
-            rating: p.rating || 4.9,
-            review_count: 50,
+            badge: p.badge || undefined,
+            rating: Number(p.rating) || 0,
+            review_count: Number(p.review_count) || 0,
             sizes: ["S", "M", "L", "XL"],
             in_stock: true,
             is_active: true,
@@ -84,8 +82,110 @@ export default function ShopGrid({
       });
     }
 
+
     return list;
   }, [initialProducts, categories]);
+
+  // Active categories for the sidebar filter (synced with active products: curated badges only show when a product actually has them!)
+  const filterCategories: ShopCategory[] = useMemo(() => {
+    const allOption: ShopCategory = { id: "all", name: "All Products", icon: "grid" };
+
+    const activeDbCategories = (categories || []).filter((c) => c.is_active !== false);
+    const activeDbMap = new Map(activeDbCategories.map((c) => [c.id.toLowerCase(), c]));
+
+    const categoryMeta: Record<string, { icon: string; badge?: string; description?: string }> = {
+      men: { icon: "men", badge: "POPULAR", description: "Oversized & boxy streetwear fits" },
+      women: { icon: "women", badge: "HOT", description: "Relaxed streetwear & crop graphics" },
+      "new-arrivals": { icon: "sparkles", badge: "NEW", description: "Fresh drops dropped weekly" },
+      bestseller: { icon: "flame", badge: "HOT", description: "Most popular streetwear fits" },
+      trending: { icon: "trending", badge: "TRENDING", description: "Viral fits setting the wave" },
+      exclusive: { icon: "tag", badge: "EXCLUSIVE", description: "Limited edition 1-of-1 drops" },
+      hoodies: { icon: "hoodie" },
+      "t-shirts": { icon: "tshirt" },
+      sweatshirts: { icon: "sweatshirt" },
+      jackets: { icon: "jacket" },
+      bottoms: { icon: "bottoms" },
+      accessories: { icon: "accessories" },
+    };
+
+    const filteredList: ShopCategory[] = [allOption];
+
+    // Curated badge categories: ONLY include in the filter IF at least 1 active product has this badge or collection!
+    const curatedKeys = [
+      { id: "new-arrivals", name: "New Arrivals", icon: "sparkles", badge: "NEW" },
+      { id: "bestseller", name: "Hot Bestseller", icon: "flame", badge: "HOT" },
+      { id: "trending", name: "Trending", icon: "trending", badge: "TRENDING" },
+      { id: "exclusive", name: "Exclusive", icon: "tag", badge: "EXCLUSIVE" },
+    ];
+
+    curatedKeys.forEach((curated) => {
+      // Check if any product actually has this badge or category assigned!
+      const hasProduct = allCatalogueProducts.some((p) =>
+        productMatchesCategory(p, curated.id)
+      );
+
+      if (hasProduct) {
+        const dbCat = activeDbMap.get(curated.id);
+        filteredList.push({
+          id: curated.id,
+          name: dbCat?.name || curated.name,
+          icon: curated.icon,
+          badge: curated.badge,
+          description: dbCat?.description || categoryMeta[curated.id]?.description,
+        });
+      }
+    });
+
+    // Apparel & Gender categories
+    const standardApparelOrder = [
+      "men",
+      "women",
+      "hoodies",
+      "t-shirts",
+      "sweatshirts",
+      "jackets",
+      "bottoms",
+      "accessories",
+    ];
+
+    const processedIds = new Set<string>(["new-arrivals", "bestseller", "trending", "exclusive"]);
+
+    standardApparelOrder.forEach((id) => {
+      const dbCat = activeDbMap.get(id);
+      const hasProduct = allCatalogueProducts.some((p) =>
+        productMatchesCategory(p, id)
+      );
+      if ((dbCat && dbCat.is_active !== false) || (!categories.length && hasProduct)) {
+        processedIds.add(id);
+        const meta = categoryMeta[id] || { icon: "grid" };
+        filteredList.push({
+          id: dbCat?.id || id,
+          name: dbCat?.name || (id === "t-shirts" ? "T-Shirts" : id.charAt(0).toUpperCase() + id.slice(1)),
+          icon: meta.icon,
+          badge: meta.badge,
+          description: dbCat?.description || meta.description,
+        });
+      }
+    });
+
+    // Any custom categories created in admin
+    activeDbCategories.forEach((dbCat) => {
+      const id = dbCat.id.toLowerCase();
+      if (!processedIds.has(id)) {
+        processedIds.add(id);
+        const meta = categoryMeta[id] || { icon: "grid" };
+        filteredList.push({
+          id: dbCat.id,
+          name: dbCat.name,
+          icon: meta.icon,
+          badge: meta.badge,
+          description: dbCat.description,
+        });
+      }
+    });
+
+    return filteredList;
+  }, [allCatalogueProducts, categories]);
 
   // Read URL params
   const categoryQuery = searchParams.get("category") || initialCategoryParam || "all";
@@ -150,6 +250,38 @@ export default function ShopGrid({
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState<boolean>(false);
   const [wishlist, setWishlist] = useState<Record<string, boolean>>({});
 
+  // Filter loading state for right-side product area
+  const [isFilterLoading, setIsFilterLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const filterTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    setCurrentPage(1);
+    setIsFilterLoading(true);
+    if (filterTimeoutRef.current) clearTimeout(filterTimeoutRef.current);
+    filterTimeoutRef.current = setTimeout(() => {
+      setIsFilterLoading(false);
+    }, 450);
+
+    return () => {
+      if (filterTimeoutRef.current) clearTimeout(filterTimeoutRef.current);
+    };
+  }, [
+    selectedCategory,
+    priceMax,
+    selectedSizes,
+    selectedColors,
+    inStockOnly,
+    sortBy,
+    searchQuery,
+  ]);
+
   // Sync category state when URL changes
   useEffect(() => {
     const effective = getInitialCategory();
@@ -167,20 +299,65 @@ export default function ShopGrid({
 
   // Wishlist local persistence
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("teenzos_wishlist");
-      if (saved) setWishlist(JSON.parse(saved));
-    } catch (e) {}
+    const loadWishlist = () => {
+      try {
+        const saved = localStorage.getItem("teenzos_wishlist");
+        if (saved) setWishlist(JSON.parse(saved));
+      } catch (e) {}
+    };
+
+    loadWishlist();
+    window.addEventListener("teenzos-wishlist-change", loadWishlist);
+    window.addEventListener("storage", loadWishlist);
+    return () => {
+      window.removeEventListener("teenzos-wishlist-change", loadWishlist);
+      window.removeEventListener("storage", loadWishlist);
+    };
   }, []);
 
   const toggleWishlist = (id: string) => {
-    setWishlist((prev) => {
-      const next = { ...prev, [id]: !prev[id] };
-      try {
-        localStorage.setItem("teenzos_wishlist", JSON.stringify(next));
-      } catch (e) {}
-      return next;
-    });
+    try {
+      let currentMap: Record<string, boolean> = {};
+      const saved = localStorage.getItem("teenzos_wishlist");
+      if (saved) {
+        try {
+          currentMap = JSON.parse(saved);
+        } catch {}
+      }
+
+      const nextVal = !currentMap[id];
+      currentMap[id] = nextVal;
+      localStorage.setItem("teenzos_wishlist", JSON.stringify(currentMap));
+
+      const found = allCatalogueProducts.find((p) => p.id === id);
+      if (found) {
+        let cachedProducts: Record<string, any> = {};
+        try {
+          const raw = localStorage.getItem("teenzos_wishlist_products");
+          if (raw) cachedProducts = JSON.parse(raw);
+        } catch {}
+        if (nextVal) {
+          cachedProducts[id] = found;
+        } else {
+          delete cachedProducts[id];
+        }
+        localStorage.setItem("teenzos_wishlist_products", JSON.stringify(cachedProducts));
+      }
+
+      setWishlist({ ...currentMap });
+
+      setTimeout(() => {
+        window.dispatchEvent(new Event("teenzos-wishlist-change"));
+      }, 0);
+
+      if (nextVal) {
+        showToast("Saved to wishlist!", "success");
+      } else {
+        showToast("Removed from wishlist", "info");
+      }
+    } catch (e) {
+      console.error("Wishlist error in ShopGrid:", e);
+    }
   };
 
   // Toggle Size
@@ -207,6 +384,7 @@ export default function ShopGrid({
     setSelectedColors([]);
     setInStockOnly(false);
     setSortBy("newest");
+    setCurrentPage(1);
     router.push("/shop", { scroll: false });
   };
 
@@ -228,7 +406,7 @@ export default function ShopGrid({
   // Category counts calculation using productMatchesCategory
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = { all: allCatalogueProducts.length };
-    SHOP_CATEGORIES.forEach((cat) => {
+    filterCategories.forEach((cat) => {
       if (cat.id !== "all") {
         counts[cat.id] = allCatalogueProducts.filter((p) =>
           productMatchesCategory(p, cat.id)
@@ -236,7 +414,7 @@ export default function ShopGrid({
       }
     });
     return counts;
-  }, [allCatalogueProducts]);
+  }, [allCatalogueProducts, filterCategories]);
 
   // In stock count
   const inStockCount = useMemo(() => {
@@ -319,8 +497,48 @@ export default function ShopGrid({
     sortBy,
   ]);
 
-  const currentCategory = SHOP_CATEGORIES.find((c) => c.id === selectedCategory);
+  const currentCategory = filterCategories.find((c) => c.id === selectedCategory) || SHOP_CATEGORIES.find((c) => c.id === selectedCategory);
   const currentCategoryName = currentCategory?.name || "All Products";
+
+  // ── Pagination Computations ──
+  const totalPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE);
+
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (currentPage - 1) * PRODUCTS_PER_PAGE;
+    return filteredProducts.slice(startIndex, startIndex + PRODUCTS_PER_PAGE);
+  }, [filteredProducts, currentPage]);
+
+  const handlePageChange = (page: number) => {
+    if (page < 1 || page > totalPages || page === currentPage) return;
+    setCurrentPage(page);
+
+    if (typeof window !== "undefined") {
+      const topEl = document.getElementById("shop-products-top");
+      if (topEl) {
+        topEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else {
+        window.scrollTo({ top: 380, behavior: "smooth" });
+      }
+    }
+  };
+
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 6) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (currentPage <= 3) {
+        pages.push(1, 2, 3, 4, "...", totalPages);
+      } else if (currentPage === 4) {
+        pages.push(1, 2, 3, 4, 5, "...", totalPages);
+      } else if (currentPage >= totalPages - 3) {
+        pages.push(1, "...", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages);
+      }
+    }
+    return pages;
+  };
 
   return (
     <div className="w-full">
@@ -343,7 +561,7 @@ export default function ShopGrid({
         {/* Left Sticky Sidebar (Desktop Only) */}
         <aside className="hidden lg:block lg:col-span-1 sticky top-[120px] space-y-4">
           <ShopSidebarFilter
-            categories={SHOP_CATEGORIES}
+            categories={filterCategories}
             selectedCategory={selectedCategory}
             onSelectCategory={handleSelectCategory}
             categoryCounts={categoryCounts}
@@ -366,7 +584,7 @@ export default function ShopGrid({
         </aside>
 
         {/* Right Main Grid Area */}
-        <div className="lg:col-span-3 w-full">
+        <div id="shop-products-top" className="lg:col-span-3 w-full scroll-mt-28">
           {/* Category Banner when a category is selected */}
           {selectedCategory !== "all" && currentCategory && (
             <div className="mb-4 sm:mb-5 p-3.5 sm:p-4 rounded-[5px] bg-white border border-stone-200/90 shadow-xs flex items-center justify-between gap-3">
@@ -487,8 +705,12 @@ export default function ShopGrid({
             </div>
           )}
 
-          {/* Empty State */}
-          {filteredProducts.length === 0 ? (
+          {/* Main Products Grid Area with Filter Loader */}
+          {isFilterLoading ? (
+            <div className="w-full min-h-[380px] sm:min-h-[480px] bg-white/70 backdrop-blur-[4px] rounded-2xl border border-stone-200/80 flex items-center justify-center p-6 sm:p-12 transition-all animate-fade-in shadow-xs">
+              <PageLoader fullScreen={false} text="Loading..." />
+            </div>
+          ) : filteredProducts.length === 0 ? (
             <div className="w-full bg-white rounded-3xl border border-stone-200/90 p-8 sm:p-14 text-center shadow-sm">
               <div className="w-16 h-16 rounded-full bg-[#FFE1ED] text-[#F72585] flex items-center justify-center mx-auto mb-4">
                 <SlidersHorizontal className="w-8 h-8" />
@@ -509,8 +731,8 @@ export default function ShopGrid({
             </div>
           ) : viewMode === "list" ? (
             /* ── List Layout ── */
-            <div className="flex flex-col gap-4">
-              {filteredProducts.map((product) => (
+            <div className="flex flex-col gap-4 animate-fade-in">
+              {paginatedProducts.map((product) => (
                 <ShopProductCard
                   key={product.id}
                   product={product}
@@ -522,8 +744,8 @@ export default function ShopGrid({
             </div>
           ) : (
             /* ── Grid Layout (Wider cards: 2 Cols Mobile, 2/3 Cols Tablet, 3 Cols Desktop) ── */
-            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-2.5 sm:gap-4 md:gap-5 lg:gap-6">
-              {filteredProducts.map((product) => (
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-2.5 sm:gap-4 md:gap-5 lg:gap-6 animate-fade-in">
+              {paginatedProducts.map((product) => (
                 <ShopProductCard
                   key={product.id}
                   product={product}
@@ -532,6 +754,72 @@ export default function ShopGrid({
                   onToggleWishlist={toggleWishlist}
                 />
               ))}
+            </div>
+          )}
+
+          {/* ── Modern Transparent Streetwear Pagination (No Container Background) ── */}
+          {!isFilterLoading && totalPages > 1 && (
+            <div className="mt-8 sm:mt-12 pt-6 border-t border-stone-200/80 flex items-center justify-center select-none bg-transparent">
+              <nav
+                aria-label="Shop Catalog Pagination"
+                className="flex items-center justify-center gap-1.5 sm:gap-2.5 bg-transparent"
+              >
+                {/* Prev Arrow (Modern Minimal Bordered Button) */}
+                <button
+                  type="button"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-stone-200 bg-white text-[#0B0D0E] hover:border-[#0B0D0E] hover:bg-[#0B0D0E] hover:text-white active:scale-90 transition-all duration-200 flex items-center justify-center shadow-2xs disabled:opacity-20 disabled:hover:border-stone-200 disabled:hover:bg-white disabled:hover:text-[#0B0D0E] disabled:cursor-not-allowed cursor-pointer shrink-0"
+                  aria-label="Previous Page"
+                >
+                  <ChevronLeft className="w-4 h-4 sm:w-4.5 sm:h-4.5 stroke-[2.2]" />
+                </button>
+
+                {/* Page Numbers */}
+                <div className="flex items-center gap-1 sm:gap-1.5 font-body">
+                  {getPageNumbers().map((p, idx) => {
+                    if (p === "...") {
+                      return (
+                        <span
+                          key={`ellipsis-${idx}`}
+                          className="w-6 h-8 sm:h-9 flex items-center justify-center text-xs sm:text-sm font-semibold text-stone-400 select-none tracking-widest"
+                        >
+                          ...
+                        </span>
+                      );
+                    }
+                    const pageNum = Number(p);
+                    const isActive = pageNum === currentPage;
+                    return (
+                      <button
+                        key={`page-${pageNum}`}
+                        type="button"
+                        onClick={() => handlePageChange(pageNum)}
+                        className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-xs sm:text-sm transition-all duration-200 cursor-pointer ${
+                          isActive
+                            ? "bg-[#0B0D0E] text-white font-bold shadow-md scale-105"
+                            : "bg-transparent text-stone-700 font-semibold hover:text-[#0B0D0E] hover:bg-stone-100 active:scale-95"
+                        }`}
+                        aria-current={isActive ? "page" : undefined}
+                        aria-label={`Go to page ${pageNum}`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Next Arrow (Modern Minimal Bordered Button) */}
+                <button
+                  type="button"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-stone-200 bg-white text-[#0B0D0E] hover:border-[#0B0D0E] hover:bg-[#0B0D0E] hover:text-white active:scale-90 transition-all duration-200 flex items-center justify-center shadow-2xs disabled:opacity-20 disabled:hover:border-stone-200 disabled:hover:bg-white disabled:hover:text-[#0B0D0E] disabled:cursor-not-allowed cursor-pointer shrink-0"
+                  aria-label="Next Page"
+                >
+                  <ChevronRight className="w-4 h-4 sm:w-4.5 sm:h-4.5 stroke-[2.2]" />
+                </button>
+              </nav>
             </div>
           )}
         </div>
@@ -547,7 +835,7 @@ export default function ShopGrid({
         hasActiveFilters={hasActiveFilters}
       >
         <ShopSidebarFilter
-          categories={SHOP_CATEGORIES}
+          categories={filterCategories}
           selectedCategory={selectedCategory}
           onSelectCategory={(catId) => {
             handleSelectCategory(catId);

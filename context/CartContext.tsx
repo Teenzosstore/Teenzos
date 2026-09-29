@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { getCurrentUserForClient } from '@/actions/auth'
 import {
   addToCart as addCartItemToDb,
@@ -25,17 +25,48 @@ export type CartItem = {
   isPersisted?: boolean
 }
 
+export type AddToCartOptions = {
+  sourceElement?: HTMLElement | null
+  event?: React.MouseEvent | MouseEvent | null
+  clientX?: number
+  clientY?: number
+  skipFly?: boolean
+  skipNotification?: boolean
+}
+
 type CartContextType = {
   cart: CartItem[]
-  addToCart: (item: Omit<CartItem, 'quantity' | 'cartItemId'>) => void
+  addToCart: (item: Omit<CartItem, 'quantity' | 'cartItemId'>, options?: AddToCartOptions) => void
   removeFromCart: (id: string) => void
   updateQuantity: (id: string, quantity: number) => void
   clearCart: () => void
   cartCount: number
   cartTotal: number
+  isCartOpen: boolean
+  setIsCartOpen: (open: boolean) => void
+  openCart: () => void
+  closeCart: () => void
+  isCartBumping: boolean
+  triggerCartBump: () => void
 }
 
-const CartContext = createContext<CartContextType | undefined>(undefined)
+const defaultCartContext: CartContextType = {
+  cart: [],
+  addToCart: () => {},
+  removeFromCart: () => {},
+  updateQuantity: () => {},
+  clearCart: () => {},
+  cartCount: 0,
+  cartTotal: 0,
+  isCartOpen: false,
+  setIsCartOpen: () => {},
+  openCart: () => {},
+  closeCart: () => {},
+  isCartBumping: false,
+  triggerCartBump: () => {},
+}
+
+const CartContext = createContext<CartContextType>(defaultCartContext)
 
 function cartKey(item: Pick<CartItem, 'id' | 'variant_id'>) {
   return `${item.id}-${item.variant_id || 'default'}`
@@ -110,6 +141,42 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([])
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [hydrated, setHydrated] = useState(false)
+  const [isCartOpen, setIsCartOpen] = useState(false)
+  const [isCartBumping, setIsCartBumping] = useState(false)
+  const bumpTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastPointerPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+
+  const openCart = useCallback(() => setIsCartOpen(true), [])
+  const closeCart = useCallback(() => setIsCartOpen(false), [])
+
+  const triggerCartBump = useCallback(() => {
+    setIsCartBumping(false)
+    requestAnimationFrame(() => {
+      setIsCartBumping(true)
+      if (bumpTimeoutRef.current) clearTimeout(bumpTimeoutRef.current)
+      bumpTimeoutRef.current = setTimeout(() => {
+        setIsCartBumping(false)
+      }, 700)
+    })
+  }, [])
+
+  useEffect(() => {
+    const handlePointerDown = (e: PointerEvent) => {
+      lastPointerPos.current = { x: e.clientX, y: e.clientY }
+    }
+    const handleTriggerBumpEvent = () => {
+      triggerCartBump()
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown, { passive: true })
+    window.addEventListener('teenzos-trigger-cart-bump', handleTriggerBumpEvent)
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('teenzos-trigger-cart-bump', handleTriggerBumpEvent)
+      if (bumpTimeoutRef.current) clearTimeout(bumpTimeoutRef.current)
+    }
+  }, [triggerCartBump])
 
   const refreshDbCart = async () => {
     const response = await getDbCart()
@@ -165,7 +232,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(LOCAL_CART_KEY, JSON.stringify(cart))
   }, [cart, hydrated, isLoggedIn])
 
-  const addToCart = (item: Omit<CartItem, 'quantity' | 'cartItemId'>) => {
+  const addToCart = (
+    item: Omit<CartItem, 'quantity' | 'cartItemId'>,
+    options?: AddToCartOptions
+  ) => {
     setCart((prev) => upsertCartItem(prev, item, 1))
 
     if (isLoggedIn && item.variant_id) {
@@ -177,6 +247,44 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           return refreshDbCart()
         })
         .catch((error) => console.error('Failed to persist cart item', error))
+    }
+
+    // ── Trigger Modern Fly-To-Cart Animation ──
+    if (typeof window !== 'undefined') {
+      let startX = options?.clientX
+      let startY = options?.clientY
+
+      if ((startX === undefined || startY === undefined) && options?.sourceElement) {
+        const rect = options.sourceElement.getBoundingClientRect()
+        startX = rect.left + rect.width / 2
+        startY = rect.top + rect.height / 2
+      } else if ((startX === undefined || startY === undefined) && options?.event) {
+        startX = options.event.clientX
+        startY = options.event.clientY
+      }
+
+      if (startX === undefined || startY === undefined || (startX === 0 && startY === 0)) {
+        startX = lastPointerPos.current.x || window.innerWidth / 2
+        startY = lastPointerPos.current.y || window.innerHeight * 0.7
+      }
+
+      if (!options?.skipFly) {
+        window.dispatchEvent(
+          new CustomEvent('teenzos-fly-to-cart', {
+            detail: {
+              item,
+              startX,
+              startY,
+            },
+          })
+        )
+      } else if (!options?.skipNotification) {
+        window.dispatchEvent(
+          new CustomEvent('teenzos-item-added-direct', {
+            detail: { item },
+          })
+        )
+      }
     }
   }
 
@@ -249,6 +357,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         clearCart,
         cartCount,
         cartTotal,
+        isCartOpen,
+        setIsCartOpen,
+        openCart,
+        closeCart,
+        isCartBumping,
+        triggerCartBump,
       }}
     >
       {children}
@@ -259,7 +373,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 export function useCart() {
   const context = useContext(CartContext)
   if (!context) {
-    throw new Error('useCart must be used within a CartProvider')
+    return defaultCartContext
   }
   return context
 }

@@ -78,7 +78,7 @@ export default function WhyTeenzos() {
         {/* ========================================================
             DESKTOP & TABLET VIEW (>= md: 768px): 5 Columns with Dividers
             ======================================================== */}
-        <div className="hidden md:grid md:grid-cols-5 items-stretch divide-x divide-stone-200/80">
+        <div className="hidden md:grid md:grid-cols-5 items-stretch divide-x divide-stone-200/80 pt-6">
           {FEATURES.map((item) => (
             <div
               key={item.id}
@@ -118,19 +118,19 @@ export default function WhyTeenzos() {
         {/* ========================================================
             MOBILE VIEW (< md: 768px): Clean Balanced 2-Column Grid
             ======================================================== */}
-        <div className="grid grid-cols-2 md:hidden gap-x-4 gap-y-7 sm:gap-x-6 sm:gap-y-8">
+        <div className="grid grid-cols-2 md:hidden gap-x-4 gap-y-5 sm:gap-x-4 sm:gap-y-6">
           {FEATURES.map((item, index) => {
             const isLastOdd = index === FEATURES.length - 1;
 
             return (
               <div
                 key={item.id}
-                className={`flex flex-col items-center text-center p-2 group ${
+                className={`flex flex-col items-center text-center py-2.5 px-2 group border border-gray-400/20  ${
                   isLastOdd ? "col-span-2 max-w-[280px] mx-auto" : ""
                 }`}
               >
                 {/* Icon Container */}
-                <div className="relative w-11 h-11 sm:w-12 sm:h-12 mb-2.5 flex items-center justify-center transform group-hover:scale-105 transition-transform duration-200">
+                <div className="relative w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center transform group-hover:scale-105 transition-transform duration-200 border border-gray-400/30 rounded-full p-2 mb-4">
                   <Image
                     src={item.icon}
                     alt={item.alt}

@@ -5,6 +5,8 @@ import "./globals.css";
 
 import { CartProvider } from "@/context/CartContext";
 import { ToastProvider } from "@/context/ToastContext";
+import CartFlyOverlay from "@/components/CartFlyOverlay";
+import PageTransitionLoader from "@/components/PageTransitionLoader";
 import FloatingActionButtons from "@/components/FloatingActionButtons";
 import Script from "next/script";
 
@@ -136,6 +138,8 @@ export default function RootLayout({
         <ToastProvider>
           <CartProvider>
             {children}
+            <PageTransitionLoader />
+            <CartFlyOverlay />
             <FloatingActionButtons />
           </CartProvider>
         </ToastProvider>

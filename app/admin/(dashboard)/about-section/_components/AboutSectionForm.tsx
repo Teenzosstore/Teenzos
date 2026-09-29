@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import Image from 'next/image'
-import { CldUploadWidget } from 'next-cloudinary'
+import { ImageKitUploadWidget } from '@/components/ImageKitUploadWidget'
 import { Check, Image as ImageIcon, Loader2, Upload } from 'lucide-react'
 import { updateAboutSectionSettings } from '@/actions/admin/aboutSection'
 import type { AboutSectionSettings } from '@/lib/aboutSection'
@@ -22,7 +22,7 @@ export function AboutSectionForm({
   }
 
   const handleUploadSuccess = (result: any) => {
-    updateField('image_url', result.info.secure_url)
+    updateField('image_url', (result.url || result.info?.secure_url))
   }
 
   const save = () => {
@@ -55,11 +55,9 @@ export function AboutSectionForm({
             />
           </div>
 
-          <CldUploadWidget
-            signatureEndpoint="/api/cloudinary/sign"
+          <ImageKitUploadWidget
             options={{
               maxFiles: 1,
-              resourceType: 'image',
               folder: "rawflex/about",
               clientAllowedFormats: ['jpg', 'jpeg', 'png', 'webp'],
             }}
@@ -76,7 +74,7 @@ export function AboutSectionForm({
                 Change Story Image
               </button>
             )}
-          </CldUploadWidget>
+          </ImageKitUploadWidget>
 
           <label className="mt-4 block text-xs font-semibold text-ink/60 mb-1">
             Image URL

@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import Image from 'next/image'
 import { createHeroSlide, deleteHeroSlide, toggleHeroSlideStatus, updateHeroSlide } from '@/actions/admin/hero'
 import { Trash2, Plus, GripVertical, Image as ImageIcon, Loader2, Pencil, Check, X } from 'lucide-react'
-import { CldUploadWidget } from 'next-cloudinary'
+import { ImageKitUploadWidget } from '@/components/ImageKitUploadWidget'
 
 export function HeroSlideList({ 
   initialSlides, 
@@ -53,7 +53,7 @@ export function HeroSlideList({
   }
 
   const handleUploadSuccess = (result: any) => {
-    const imageUrl = result.info.secure_url
+    const imageUrl = (result.url || result.info?.secure_url)
     
     startTransition(async () => {
       const res = await createHeroSlide(imageUrl, position)
@@ -96,11 +96,9 @@ export function HeroSlideList({
         </div>
         
         {slides.length < 5 ? (
-          <CldUploadWidget 
-            signatureEndpoint="/api/cloudinary/sign"
+          <ImageKitUploadWidget 
             options={{
               maxFiles: 1,
-              resourceType: "image",
               folder: "rawflex/hero-slides",
               clientAllowedFormats: ["jpg", "jpeg", "png", "webp"]
             }}
@@ -116,7 +114,7 @@ export function HeroSlideList({
                 Add Slide
               </button>
             )}
-          </CldUploadWidget>
+          </ImageKitUploadWidget>
         ) : (
           <span className="text-sm font-medium text-orange-600 bg-orange-50 px-3 py-1 rounded-full border border-orange-200">
             Maximum 5 slides reached
@@ -168,16 +166,34 @@ export function HeroSlideList({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <label className="relative inline-flex items-center cursor-pointer ml-2">
-                      <input 
-                        type="checkbox" 
-                        className="sr-only peer"
-                        checked={slide.is_active}
-                        onChange={() => handleToggle(slide.id, slide.is_active)}
-                        disabled={isPending || (!slide.is_active && activeCount >= 5)}
+                    <span
+                      className={`hidden sm:inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full transition-colors ${
+                        slide.is_active
+                          ? 'bg-pink-soft text-pink border border-pink/20'
+                          : 'bg-gray-100 text-gray-400 border border-gray-200'
+                      }`}
+                    >
+                      {slide.is_active ? 'Active' : 'Disabled'}
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={slide.is_active}
+                      disabled={isPending || (!slide.is_active && activeCount >= 5)}
+                      onClick={() => handleToggle(slide.id, slide.is_active)}
+                      className={`group relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-pink/40 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+                        slide.is_active ? 'bg-pink shadow-sm shadow-pink/30' : 'bg-gray-200 hover:bg-gray-300'
+                      }`}
+                      title={slide.is_active ? 'Active (Click to Hide)' : 'Inactive (Click to Show)'}
+                    >
+                      <span className="sr-only">Toggle slide active status</span>
+                      <span
+                        aria-hidden="true"
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                          slide.is_active ? 'translate-x-[22px]' : 'translate-x-0.5'
+                        }`}
                       />
-                      <div className="w-9 h-5 bg-panel2 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-ink/50 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-ink after:border-ink/50 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-gold"></div>
-                    </label>
+                    </button>
                     
                     <button
                       onClick={() => startEdit(slide)}

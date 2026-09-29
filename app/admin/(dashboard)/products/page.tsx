@@ -1,87 +1,49 @@
 import { requireAdmin } from '@/lib/adminAuth'
-import Link from 'next/link'
-import { Plus, Package } from 'lucide-react'
 import type { Metadata } from 'next'
-import ProductRow from './_components/ProductRow'
+import ProductCatalogManager from './_components/ProductCatalogManager'
 
 export const metadata: Metadata = {
-  title: 'Products',
+  title: 'Products | Admin Catalog',
+  description: 'Manage your product catalog, descriptions, and streetwear specifications.',
 }
+
+export const dynamic = 'force-dynamic'
 
 export default async function ProductsPage() {
   const admin = await requireAdmin()
   const supabase = admin.ok ? admin.adminClient : null
 
-  const { data: products } = supabase
-    ? await supabase
+  let productsData: any[] = []
+  let categoriesData: any[] = []
+
+  if (supabase) {
+    const [pRes, cRes] = await Promise.all([
+      supabase
         .from('products')
-        .select('*, categories(name)')
-        .order('created_at', { ascending: false })
-    : { data: [] }
+        .select(`
+          *,
+          categories(id, name),
+          product_variants(id, variant_name, price, original_price, stock_quantity, is_active),
+          product_images(id, image_url, sort_order)
+        `)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('categories')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name'),
+    ])
+
+    if (pRes.data) productsData = pRes.data
+    if (cRes.data) categoriesData = cRes.data
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink">Products</h1>
-          <p className="text-ink/60 text-sm mt-0.5">
-            Manage your product catalog
-          </p>
-        </div>
-        <Link
-          href="/admin/products/new"
-          className="admin-primary-action px-4 py-2.5 text-sm rounded-xl"
-        >
-          <Plus className="w-4 h-4" />
-          Add Product
-        </Link>
-      </div>
-
-      {/* Table */}
-      <div className="bg-panel rounded-xl border border-cream-line overflow-hidden">
-        {!products || products.length === 0 ? (
-          <div className="p-12 text-center">
-            <Package className="w-10 h-10 text-ink/50 mx-auto mb-3" />
-            <p className="text-ink/60 text-sm">No products yet</p>
-            <p className="text-ink/40 text-xs mt-1">
-              Create your first product to get started.
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-panel/50">
-                  <th className="text-left text-xs font-medium text-ink/60 uppercase tracking-wider px-6 py-3">
-                    Product
-                  </th>
-                  <th className="text-left text-xs font-medium text-ink/60 uppercase tracking-wider px-6 py-3">
-                    Category
-                  </th>
-                  <th className="text-left text-xs font-medium text-ink/60 uppercase tracking-wider px-6 py-3">
-                    Badge
-                  </th>
-                  <th className="text-left text-xs font-medium text-ink/60 uppercase tracking-wider px-6 py-3">
-                    Status
-                  </th>
-                  <th className="text-left text-xs font-medium text-ink/60 uppercase tracking-wider px-6 py-3">
-                    Created
-                  </th>
-                  <th className="text-right text-xs font-medium text-ink/60 uppercase tracking-wider px-6 py-3">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-cream-line">
-                {products.map((product) => (
-                  <ProductRow key={product.id} product={product} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+    <div className="w-full max-w-[1500px] mx-auto pb-16">
+      <ProductCatalogManager
+        initialProducts={productsData}
+        categories={categoriesData}
+      />
     </div>
   )
 }

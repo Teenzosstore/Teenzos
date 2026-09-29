@@ -2,8 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/adminAuth'
-import { v2 as cloudinary } from 'cloudinary'
-import sharp from 'sharp'
+import { deleteFromImageKit, isImageKitConfigured } from '@/lib/imagekit'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
@@ -12,86 +11,36 @@ export type ActionResult = {
   success?: boolean
 }
 
-const PRODUCT_IMAGE_VARIANT_WIDTHS = [400, 800, 1200, 1600] as const
-
-function extractCloudinaryPublicId(url: string): string | null {
-  if (!url || !url.startsWith('https://res.cloudinary.com/')) return null
-  const uploadIndex = url.indexOf('/image/upload/')
-  if (uploadIndex === -1) return null
-
-  let rest = url.slice(uploadIndex + '/image/upload/'.length)
-  // Strip inline transforms if any
-  if (rest.includes('/') && !rest.startsWith('v') && !rest.startsWith('rawflex/')) {
-    const firstSlash = rest.indexOf('/')
-    const segment = rest.slice(0, firstSlash)
-    if (segment.includes(',') || segment.startsWith('w_') || segment.startsWith('c_') || segment.startsWith('f_')) {
-      rest = rest.slice(firstSlash + 1)
+function extractPublicId(url: string): string | null {
+  if (!url) return null
+  if (url.includes('ik.imagekit.io')) {
+    try {
+      const urlObj = new URL(url)
+      return urlObj.pathname.replace(/^\/[^/]+\//, '')
+    } catch {
+      return null
     }
   }
-
-  // Strip version tag
-  rest = rest.replace(/^v\d+\//, '')
-  // Strip extension
-  const publicId = rest.replace(/\.[a-zA-Z0-9]+$/, '')
-  return publicId.replace(/_w(400|800|1200|1600)$/, '')
+  if (url.startsWith('https://res.cloudinary.com/')) {
+    const uploadIndex = url.indexOf('/image/upload/')
+    if (uploadIndex === -1) return null
+    let rest = url.slice(uploadIndex + '/image/upload/'.length)
+    rest = rest.replace(/^v\d+\//, '')
+    const publicId = rest.replace(/\.[a-zA-Z0-9]+$/, '')
+    return publicId.replace(/_w(400|800|1200|1600)$/, '')
+  }
+  return null
 }
 
 export async function processAndUploadProductImageVariants(
   source: string | Buffer,
-  basePublicId: string
+  _basePublicId: string
 ): Promise<string[]> {
-  if (!configureCloudinary()) {
-    throw new Error('Cloudinary is not configured')
-  }
-
-  let inputBuffer: Buffer
+  // ImageKit automatically optimizes and serves responsive images via CDN
   if (typeof source === 'string') {
-    const response = await fetch(source)
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image source for optimization: ${response.statusText}`)
-    }
-    const arrayBuffer = await response.arrayBuffer()
-    inputBuffer = Buffer.from(arrayBuffer)
-  } else {
-    inputBuffer = source
+    return [source]
   }
-
-  const uploadedUrls: string[] = []
-
-  // Approach A: Always generate all 4 filename slots (400, 800, 1200, 1600).
-  // With withoutEnlargement: true, sharp preserves aspect ratio and will NOT upscale small images,
-  // storing the largest available un-upscaled WebP at larger filename slots to guarantee zero 404s.
-  for (const width of PRODUCT_IMAGE_VARIANT_WIDTHS) {
-    // Rule 1, 3, 4: Scale proportionally, convert to WebP quality 82 from ORIGINAL buffer
-    const resizedBuffer = await sharp(inputBuffer)
-      .resize(width, null, { fit: 'inside', withoutEnlargement: true })
-      .webp({ quality: 82 })
-      .toBuffer()
-
-    const variantPublicId = `${basePublicId}_w${width}`
-
-    const result = await new Promise<any>((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          public_id: variantPublicId,
-          format: 'webp',
-          resource_type: 'image',
-          overwrite: true,
-        },
-        (error, uploadResult) => {
-          if (error) reject(error)
-          else resolve(uploadResult)
-        }
-      )
-      uploadStream.end(resizedBuffer)
-    })
-
-    if (result?.secure_url) {
-      uploadedUrls.push(result.secure_url)
-    }
-  }
-
-  return uploadedUrls
+  return []
 }
 
 function slugify(text: string): string {
@@ -102,24 +51,6 @@ function slugify(text: string): string {
     .replace(/[\s_]+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '')
-}
-
-function configureCloudinary() {
-  if (
-    !process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ||
-    !process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY ||
-    !process.env.CLOUDINARY_API_SECRET
-  ) {
-    return false
-  }
-
-  cloudinary.config({
-    cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  })
-
-  return true
 }
 
 type ProductVariantInput = {
@@ -179,13 +110,20 @@ function uniqueVariantsByName(variants: ProductVariantInput[]): ProductVariantIn
   return Array.from(byName.values())
 }
 
-function createDefaultSizeVariants(basePrice: number, colorNames: string[]): ProductVariantInput[] {
-  const sizes = [
-    { variant_name: 'S', price: basePrice, original_price: null, stock_quantity: 0, is_active: true },
-    { variant_name: 'M', price: basePrice, original_price: null, stock_quantity: 0, is_active: true },
-    { variant_name: 'L', price: basePrice, original_price: null, stock_quantity: 0, is_active: true },
-    { variant_name: 'XL', price: basePrice, original_price: null, stock_quantity: 0, is_active: true },
-  ]
+function createDefaultSizeVariants(
+  basePrice: number,
+  oldPrice: number | null,
+  colorNames: string[],
+  stock: number = 10
+): ProductVariantInput[] {
+  const SIZES = ['S', 'M', 'L', 'XL', 'XXL']
+  const sizes = SIZES.map((s) => ({
+    variant_name: s,
+    price: basePrice,
+    original_price: oldPrice,
+    stock_quantity: stock,
+    is_active: true,
+  }))
 
   if (colorNames.length === 0) {
     return sizes
@@ -195,19 +133,57 @@ function createDefaultSizeVariants(basePrice: number, colorNames: string[]): Pro
     sizes.map(size => ({
       ...size,
       variant_name: `${colorName} - ${size.variant_name}`,
+      stock_quantity: stock,
     }))
   )
+}
+
+export async function syncCategoryProductCounts(
+  supabase: Awaited<ReturnType<typeof createClient>>
+) {
+  try {
+    const { data: prods } = await supabase
+      .from('products')
+      .select('id, category_id, is_active')
+      .eq('is_active', true)
+
+    const { data: cats } = await supabase
+      .from('categories')
+      .select('id, slug')
+
+    if (!cats || cats.length === 0) return
+
+    for (const cat of cats) {
+      const matchCount = (prods || []).filter(
+        (p: any) => p.category_id === cat.id || (cat.slug && p.category_id === cat.slug)
+      ).length
+      const countStr = `${matchCount} ${matchCount === 1 ? 'style' : 'styles'}`
+      await supabase
+        .from('categories')
+        .update({ count: countStr })
+        .eq('id', cat.id)
+    }
+  } catch (err) {
+    console.error('Error syncing category counts:', err)
+  }
 }
 
 async function revalidateProductPaths(
   supabase: Awaited<ReturnType<typeof createClient>>,
   productId: string
 ) {
+  await syncCategoryProductCounts(supabase)
+
   revalidatePath('/admin/products')
+  revalidatePath('/admin/products', 'page')
+  revalidatePath('/admin/categories')
+  revalidatePath('/admin/categories', 'page')
   revalidatePath(`/admin/products/${productId}/edit`)
   revalidatePath('/shop')
+  revalidatePath('/shop', 'page')
   revalidatePath(`/shop/${productId}`)
   revalidatePath('/')
+  revalidatePath('/', 'page')
 
   const { data: product } = await supabase
     .from('products')
@@ -259,6 +235,7 @@ export async function createProduct(
   const name = formData.get('name') as string
   const categoryId = formData.get('category_id') as string
   const shortDescription = formData.get('short_description') as string
+  const featuresJson = formData.get('features_json') as string
   const description = formData.get('description') as string
   const fabric = formData.get('fabric') as string
   const stitching = formData.get('stitching') as string
@@ -267,11 +244,14 @@ export async function createProduct(
   const seoKeywords = formData.get('seo_keywords') as string
   const badge = formData.get('badge') as string
   const colorName = formData.get('color_name') as string
-  const isActive = formData.get('is_active') === 'on'
-  const isFeatured = formData.get('is_featured') === 'on'
+  const isActive = formData.has('is_active_submitted')
+    ? (formData.get('is_active') === 'on' || formData.get('is_active') === 'true')
+    : (formData.get('is_active') === 'on' || formData.get('is_active') === 'true' || !formData.has('is_active'))
+  const isFeatured = formData.get('is_featured') === 'on' || formData.get('is_featured') === 'true'
   const imageUrl = formData.get('image_url') as string
   const cloudinaryPublicId = formData.get('cloudinary_public_id') as string
   const price = formData.get('price') as string
+  const oldPrice = formData.get('oldPrice') as string
   const useGlobalSizeChart = formData.get('use_global_size_chart') === 'true'
   const sizeChartImageUrl = formData.get('size_chart_image_url') as string
   const sizeChartCloudinaryId = formData.get('size_chart_cloudinary_public_id') as string
@@ -283,6 +263,28 @@ export async function createProduct(
     return { error: 'Base price is required' }
   }
 
+  let featuresArray: string[] = []
+  try {
+    if (featuresJson) {
+      const parsed = JSON.parse(featuresJson)
+      if (Array.isArray(parsed)) {
+        featuresArray = parsed.map((s: any) => String(s).trim()).filter(Boolean)
+      }
+    }
+  } catch {}
+
+  const finalShortDescription = shortDescription ? shortDescription.trim() : null
+
+  let primaryColorHex: string | null = null
+  try {
+    if (colorName && colorName.startsWith('[')) {
+      const parsedColors = JSON.parse(colorName)
+      if (Array.isArray(parsedColors) && parsedColors[0]?.hex) {
+        primaryColorHex = parsedColors[0].hex
+      }
+    }
+  } catch {}
+
   const slug = slugify(name)
   const id = crypto.randomUUID()
 
@@ -292,16 +294,15 @@ export async function createProduct(
     slug,
     category_id: categoryId || null,
     price: parseFloat(price),
-    short_description: shortDescription || null,
+    oldPrice: oldPrice ? parseFloat(oldPrice) : null,
+    short_description: finalShortDescription,
     description: description || null,
-    fabric: fabric || null,
-    stitching: stitching || null,
     seo_title: seoTitle || null,
     seo_description: seoDescription || null,
     seo_keywords: seoKeywords || null,
     badge: badge || null,
     color_name: colorName || null,
-    color_hex: null,
+    color_hex: primaryColorHex || null,
     color_group_id: null,
     is_active: isActive,
     is_featured: isFeatured,
@@ -309,6 +310,8 @@ export async function createProduct(
     use_global_size_chart: useGlobalSizeChart,
     size_chart_image_url: useGlobalSizeChart ? null : (sizeChartImageUrl || null),
     size_chart_cloudinary_public_id: useGlobalSizeChart ? null : (sizeChartCloudinaryId || null),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   }).select('id').single()
 
   if (error) {
@@ -318,16 +321,31 @@ export async function createProduct(
     return { error: error.message }
   }
 
-  // Also add the image to product_images table so it appears in the gallery
+  // Save features to product_information table with label 'Key Feature'
+  if (featuresArray.length > 0) {
+    await supabase.from('product_information').insert(
+      featuresArray.map((feat, idx) => ({
+        product_id: id,
+        label: 'Key Feature',
+        value: feat,
+        display_order: idx,
+      }))
+    )
+  }
+
+  // Insert default specifications into product_information table
+  const defaultSpecifications = [
+    { product_id: id, label: 'Fabric Details', value: '380 GSM Heavyweight Cotton Fleece', display_order: 0 },
+    { product_id: id, label: 'Fit Profile', value: 'Oversized Streetwear Boxy Silhouette', display_order: 1 },
+    { product_id: id, label: 'Stitching Details', value: 'Double-needle reinforced seams', display_order: 2 },
+    { product_id: id, label: 'Care Instructions', value: 'Machine wash cold inside out, tumble dry low', display_order: 3 },
+    { product_id: id, label: 'Country of Origin', value: 'Crafted with Pride in India', display_order: 4 },
+  ]
+  await supabase.from('product_information').insert(defaultSpecifications)
+
+  // Add the primary image to product_images table so it appears in the gallery
   if (imageUrl) {
-    const finalPublicId = cloudinaryPublicId || extractCloudinaryPublicId(imageUrl)
-    if (imageUrl && finalPublicId && configureCloudinary()) {
-      try {
-        await processAndUploadProductImageVariants(imageUrl, finalPublicId)
-      } catch (e) {
-        console.error('Failed to generate product image WebP variants on createProduct:', e)
-      }
-    }
+    const finalPublicId = cloudinaryPublicId || extractPublicId(imageUrl)
 
     await supabase.from('product_images').insert({
       product_id: id,
@@ -339,15 +357,20 @@ export async function createProduct(
   }
 
   const basePrice = parseFloat(price)
+  const numOldPrice = oldPrice ? parseFloat(oldPrice) : null
+  const initialStockRaw = formData.get('initial_stock') as string
+  const initialStock = initialStockRaw !== null && initialStockRaw !== undefined && initialStockRaw !== ''
+    ? Math.max(0, parseInt(initialStockRaw, 10) || 0)
+    : 10
   const colorNames = parseProductColorNames(colorName)
-  const sizeVariants = createDefaultSizeVariants(basePrice, colorNames)
+  const sizeVariants = createDefaultSizeVariants(basePrice, numOldPrice, colorNames, initialStock)
 
   await supabase.from('product_variants').insert(
     sizeVariants.map(v => ({ product_id: id, ...v }))
   )
 
   await revalidateProductPaths(supabase, id)
-  redirect(`/admin/products/${product.id}/edit`)
+  redirect(`/admin/products/${product.id}/edit?created=true`)
 }
 
 export async function updateProduct(
@@ -362,6 +385,7 @@ export async function updateProduct(
   const name = formData.get('name') as string
   const categoryId = formData.get('category_id') as string
   const shortDescription = formData.get('short_description') as string
+  const featuresJson = formData.get('features_json') as string
   const description = formData.get('description') as string
   const fabric = formData.get('fabric') as string
   const stitching = formData.get('stitching') as string
@@ -370,9 +394,14 @@ export async function updateProduct(
   const seoKeywords = formData.get('seo_keywords') as string
   const badge = formData.get('badge') as string
   const colorName = formData.get('color_name') as string
-  const isActive = formData.get('is_active') === 'on'
-  const isFeatured = formData.get('is_featured') === 'on'
+  const isActive = formData.has('is_active_submitted')
+    ? (formData.get('is_active') === 'on' || formData.get('is_active') === 'true')
+    : (formData.get('is_active') === 'on' || formData.get('is_active') === 'true')
+  const isFeatured = formData.get('is_featured') === 'on' || formData.get('is_featured') === 'true'
+  const imageUrl = formData.get('image_url') as string
+  const cloudinaryPublicId = formData.get('cloudinary_public_id') as string
   const price = formData.get('price') as string
+  const oldPrice = formData.get('oldPrice') as string
   const useGlobalSizeChart = formData.get('use_global_size_chart') === 'true'
   const sizeChartImageUrl = formData.get('size_chart_image_url') as string
   const sizeChartCloudinaryId = formData.get('size_chart_cloudinary_public_id') as string
@@ -384,32 +413,57 @@ export async function updateProduct(
     return { error: 'Base price is required' }
   }
 
+  let featuresArray: string[] = []
+  try {
+    if (featuresJson) {
+      const parsed = JSON.parse(featuresJson)
+      if (Array.isArray(parsed)) {
+        featuresArray = parsed.map((s: any) => String(s).trim()).filter(Boolean)
+      }
+    }
+  } catch {}
+
+  const finalShortDescription = shortDescription ? shortDescription.trim() : null
+
+  let primaryColorHex: string | null = null
+  try {
+    if (colorName && colorName.startsWith('[')) {
+      const parsedColors = JSON.parse(colorName)
+      if (Array.isArray(parsedColors) && parsedColors[0]?.hex) {
+        primaryColorHex = parsedColors[0].hex
+      }
+    }
+  } catch {}
+
   const slug = slugify(name)
+
+  const updatePayload: Record<string, any> = {
+    name,
+    slug,
+    category_id: categoryId || null,
+    price: parseFloat(price),
+    oldPrice: oldPrice ? parseFloat(oldPrice) : null,
+    short_description: finalShortDescription,
+    description: description || null,
+    seo_title: seoTitle || null,
+    seo_description: seoDescription || null,
+    seo_keywords: seoKeywords || null,
+    badge: badge || null,
+    color_name: colorName || null,
+    color_hex: primaryColorHex || null,
+    color_group_id: null,
+    is_active: isActive,
+    is_featured: isFeatured,
+    featured_image_url: imageUrl || null,
+    use_global_size_chart: useGlobalSizeChart,
+    size_chart_image_url: useGlobalSizeChart ? null : (sizeChartImageUrl || null),
+    size_chart_cloudinary_public_id: useGlobalSizeChart ? null : (sizeChartCloudinaryId || null),
+    updated_at: new Date().toISOString(),
+  }
 
   const { error } = await supabase
     .from('products')
-    .update({
-      name,
-      slug,
-      category_id: categoryId || null,
-      price: parseFloat(price),
-      short_description: shortDescription || null,
-      description: description || null,
-      fabric: fabric || null,
-      stitching: stitching || null,
-      seo_title: seoTitle || null,
-      seo_description: seoDescription || null,
-      seo_keywords: seoKeywords || null,
-      badge: badge || null,
-      color_name: colorName || null,
-      color_hex: null,
-      color_group_id: null,
-      is_active: isActive,
-      is_featured: isFeatured,
-      use_global_size_chart: useGlobalSizeChart,
-      size_chart_image_url: useGlobalSizeChart ? null : (sizeChartImageUrl || null),
-      size_chart_cloudinary_public_id: useGlobalSizeChart ? null : (sizeChartCloudinaryId || null),
-    })
+    .update(updatePayload)
     .eq('id', id)
 
   if (error) {
@@ -419,15 +473,58 @@ export async function updateProduct(
     return { error: error.message }
   }
 
-  // Update default variant price to match base price
+  // Sync Key Features in product_information table
+  await supabase
+    .from('product_information')
+    .delete()
+    .eq('product_id', id)
+    .eq('label', 'Key Feature')
+
+  if (featuresArray.length > 0) {
+    await supabase.from('product_information').insert(
+      featuresArray.map((feat, idx) => ({
+        product_id: id,
+        label: 'Key Feature',
+        value: feat,
+        display_order: idx,
+      }))
+    )
+  }
+
+  // Sync featured image with product_images table
+  if (imageUrl) {
+    const finalPublicId = cloudinaryPublicId || extractPublicId(imageUrl)
+    const { data: existingImg } = await supabase
+      .from('product_images')
+      .select('id')
+      .eq('product_id', id)
+      .eq('image_url', imageUrl)
+      .maybeSingle()
+
+    if (!existingImg) {
+      await supabase.from('product_images').insert({
+        product_id: id,
+        image_url: imageUrl,
+        cloudinary_public_id: finalPublicId || null,
+        sort_order: 0,
+        color_name: null,
+      })
+    }
+  }
+
+  // Update default variant price to match base price & MRP
   await supabase
     .from('product_variants')
-    .update({ price: parseFloat(price) })
+    .update({
+      price: parseFloat(price),
+      original_price: oldPrice ? parseFloat(oldPrice) : null,
+      updated_at: new Date().toISOString(),
+    })
     .eq('product_id', id)
     .eq('variant_name', 'Default')
 
   await revalidateProductPaths(supabase, id)
-  redirect(`/admin/products/${id}/edit`)
+  return { success: true }
 }
 
 export async function deleteProduct(id: string): Promise<ActionResult> {
@@ -441,7 +538,12 @@ export async function deleteProduct(id: string): Promise<ActionResult> {
     return { error: error.message }
   }
 
+  await syncCategoryProductCounts(supabase)
+
   revalidatePath('/admin/products')
+  revalidatePath('/admin/categories')
+  revalidatePath('/shop')
+  revalidatePath('/')
   return { success: true }
 }
 
@@ -455,21 +557,26 @@ export async function saveProductInformation(
   if (admin.ok === false) return { error: admin.error }
   const supabase = admin.adminClient
 
-  // Delete existing items and re-insert
+  // Delete existing specifications (keep 'Key Feature' items safe)
   const { error: deleteError } = await supabase
     .from('product_information')
     .delete()
     .eq('product_id', productId)
+    .neq('label', 'Key Feature')
 
   if (deleteError) {
     return { error: deleteError.message }
   }
 
-  if (items.length > 0) {
-    const rows = items.map((item, index) => ({
+  const validItems = items.filter(
+    (item) => item.label && item.label.trim() && item.value && item.value.trim()
+  )
+
+  if (validItems.length > 0) {
+    const rows = validItems.map((item, index) => ({
       product_id: productId,
-      label: item.label,
-      value: item.value,
+      label: item.label.trim(),
+      value: item.value.trim(),
       display_order: index,
     }))
 
@@ -482,7 +589,7 @@ export async function saveProductInformation(
     }
   }
 
-  revalidatePath(`/admin/products/${productId}`)
+  await revalidateProductPaths(supabase, productId)
   return { success: true }
 }
 
@@ -498,15 +605,7 @@ export async function addProductImage(
   if (admin.ok === false) return { error: admin.error }
   const supabase = admin.adminClient
 
-  const finalPublicId = cloudinaryPublicId || extractCloudinaryPublicId(imageUrl)
-
-  if (imageUrl && finalPublicId && configureCloudinary()) {
-    try {
-      await processAndUploadProductImageVariants(imageUrl, finalPublicId)
-    } catch (e) {
-      console.error('Failed to generate product image WebP variants on addProductImage:', e)
-    }
-  }
+  const finalPublicId = cloudinaryPublicId || extractPublicId(imageUrl)
 
   // Get max sort_order
   const { data: maxSort } = await supabase
@@ -555,22 +654,13 @@ export async function deleteProductImage(imageId: string, productId: string): Pr
     .eq('id', imageId)
     .single()
 
-  const publicId = image?.cloudinary_public_id || (image?.image_url ? extractCloudinaryPublicId(image.image_url) : null)
+  const publicId = image?.cloudinary_public_id || (image?.image_url ? extractPublicId(image.image_url) : null)
 
-  if (publicId && !configureCloudinary()) {
-    return { error: 'Cloudinary is not configured, so this image cannot be deleted safely.' }
-  }
-
-  if (publicId) {
+  if (publicId && isImageKitConfigured()) {
     try {
-      await cloudinary.uploader.destroy(publicId, { resource_type: 'image' })
-      for (const w of PRODUCT_IMAGE_VARIANT_WIDTHS) {
-        try {
-          await cloudinary.uploader.destroy(`${publicId}_w${w}`, { resource_type: 'image' })
-        } catch {}
-      }
+      await deleteFromImageKit(publicId)
     } catch (error: any) {
-      return { error: error?.message || 'Failed to delete image from Cloudinary' }
+      console.warn('Failed to delete image from ImageKit:', error?.message)
     }
   }
 
@@ -994,3 +1084,194 @@ export async function saveProductFaqs(
   revalidatePath(`/admin/products/${productId}`)
   return { success: true }
 }
+
+export async function updateVariantsStockByColor(
+  productId: string,
+  colorName: string,
+  stockQuantity: number
+): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  if (admin.ok === false) return { error: admin.error }
+  const supabase = admin.adminClient
+
+  if (!productId || !colorName?.trim()) {
+    return { error: 'Product ID and Color Name are required' }
+  }
+
+  const validStock = Math.max(0, parseInt(stockQuantity?.toString() || '0', 10) || 0)
+  const normalizedColor = colorName.trim().toLowerCase()
+
+  // 1. Fetch all variants of this product
+  const { data: variants, error: fetchErr } = await supabase
+    .from('product_variants')
+    .select('id, variant_name, price, original_price')
+    .eq('product_id', productId)
+
+  if (fetchErr) {
+    return { error: fetchErr.message }
+  }
+
+  // Find variants matching this color
+  const matchingVariants = (variants || []).filter((v: any) => {
+    const vName = (v.variant_name || '').toLowerCase()
+    return vName.includes(normalizedColor)
+  })
+
+  if (matchingVariants.length > 0) {
+    const ids = matchingVariants.map((v: any) => v.id)
+    const { error: updateErr } = await supabase
+      .from('product_variants')
+      .update({ stock_quantity: validStock })
+      .in('id', ids)
+
+    if (updateErr) {
+      return { error: updateErr.message }
+    }
+  } else {
+    // If no variants exist with color prefix, check if all variants are general sizes (e.g. S, M, L)
+    const generalVariants = (variants || []).filter((v: any) => !v.variant_name.includes(' - '))
+    if (generalVariants.length > 0 && (variants || []).length === generalVariants.length) {
+      const ids = generalVariants.map((v: any) => v.id)
+      const { error: updateErr } = await supabase
+        .from('product_variants')
+        .update({ stock_quantity: validStock })
+        .in('id', ids)
+
+      if (updateErr) {
+        return { error: updateErr.message }
+      }
+    } else {
+      // Create standard size variants for this color if none exist
+      const STANDARD_SIZES = ['S', 'M', 'L', 'XL', 'XXL']
+      const { data: prod } = await supabase
+        .from('products')
+        .select('price, "oldPrice"')
+        .eq('id', productId)
+        .single()
+
+      const basePrice = prod?.price || 1999
+      const baseOldPrice = prod?.oldPrice || null
+
+      const newVariants = STANDARD_SIZES.map((size) => ({
+        id: crypto.randomUUID(),
+        product_id: productId,
+        variant_name: `${colorName.trim()} - ${size}`,
+        price: basePrice,
+        original_price: baseOldPrice,
+        stock_quantity: validStock,
+        is_active: true,
+      }))
+
+      const { error: insertErr } = await supabase
+        .from('product_variants')
+        .insert(newVariants)
+
+      if (insertErr) {
+        return { error: insertErr.message }
+      }
+    }
+  }
+
+  // Also update product's color_name JSON with this stock value
+  const { data: prod } = await supabase
+    .from('products')
+    .select('color_name')
+    .eq('id', productId)
+    .single()
+
+  if (prod?.color_name) {
+    try {
+      if (prod.color_name.startsWith('[')) {
+        const parsed = JSON.parse(prod.color_name) as { name: string; hex: string; stock?: number }[]
+        const updated = parsed.map((c) =>
+          c.name.toLowerCase() === normalizedColor
+            ? { ...c, stock: validStock }
+            : c
+        )
+        await supabase
+          .from('products')
+          .update({ color_name: JSON.stringify(updated) })
+          .eq('id', productId)
+      }
+    } catch {}
+  }
+
+  await revalidateProductPaths(supabase, productId)
+  return { success: true }
+}
+
+export async function bulkUpdateVariantsStock(
+  productId: string,
+  stockQuantity: number,
+  colorFilter?: string | null
+): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  if (admin.ok === false) return { error: admin.error }
+  const supabase = admin.adminClient
+
+  if (!productId) {
+    return { error: 'Product ID is required' }
+  }
+
+  const validStock = Math.max(0, parseInt(stockQuantity?.toString() || '0', 10) || 0)
+
+  // 1. Fetch variants
+  const { data: variants, error: fetchErr } = await supabase
+    .from('product_variants')
+    .select('id, variant_name')
+    .eq('product_id', productId)
+
+  if (fetchErr) {
+    return { error: fetchErr.message }
+  }
+
+  let targetVariants = variants || []
+  if (colorFilter && colorFilter !== 'All' && colorFilter !== 'General') {
+    const norm = colorFilter.trim().toLowerCase()
+    targetVariants = targetVariants.filter((v: any) => {
+      const vName = (v.variant_name || '').toLowerCase()
+      return vName.includes(norm)
+    })
+  }
+
+  if (targetVariants.length > 0) {
+    const ids = targetVariants.map((v: any) => v.id)
+    const { error: updateErr } = await supabase
+      .from('product_variants')
+      .update({ stock_quantity: validStock })
+      .in('id', ids)
+
+    if (updateErr) {
+      return { error: updateErr.message }
+    }
+  }
+
+  // Also update product's color_name JSON if applicable
+  const { data: prod } = await supabase
+    .from('products')
+    .select('color_name')
+    .eq('id', productId)
+    .single()
+
+  if (prod?.color_name) {
+    try {
+      if (prod.color_name.startsWith('[')) {
+        const parsed = JSON.parse(prod.color_name) as { name: string; hex: string; stock?: number }[]
+        const updated = parsed.map((c) => {
+          if (!colorFilter || colorFilter === 'All' || colorFilter === 'General' || c.name.toLowerCase() === colorFilter.toLowerCase()) {
+            return { ...c, stock: validStock }
+          }
+          return c
+        })
+        await supabase
+          .from('products')
+          .update({ color_name: JSON.stringify(updated) })
+          .eq('id', productId)
+      }
+    } catch {}
+  }
+
+  await revalidateProductPaths(supabase, productId)
+  return { success: true }
+}
+

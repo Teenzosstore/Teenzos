@@ -2,8 +2,8 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { ChevronLeft, ChevronRight, X, ZoomIn } from 'lucide-react'
-import { productLoaderFor } from '@/lib/cloudinaryImage'
+import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { productLoaderFor } from '@/lib/imagekitImage'
 
 type ProductGalleryProps = {
   images: string[]
@@ -71,10 +71,35 @@ export default function ProductGallery({
   const singlePointerStartPan = useRef<Point>({ x: 0, y: 0 })
   const didLightboxMove = useRef(false)
   const lastTapAt = useRef(0)
+  const thumbnailRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const thumbnailsContainerRef = useRef<HTMLDivElement | null>(null)
 
   // Ensure we have at least one image to display
   const displayImages = images.length > 0 ? images : ['/image.png']
   const hasMultipleImages = displayImages.length > 1
+
+  // Auto-scroll active thumbnail into view whenever activeIndex changes
+  useEffect(() => {
+    const container = thumbnailsContainerRef.current
+    const activeThumb = thumbnailRefs.current[activeIndex]
+    if (!container || !activeThumb) return
+
+    // If on mobile (horizontal scrolling)
+    if (container.scrollWidth > container.clientWidth) {
+      const containerRect = container.getBoundingClientRect()
+      const thumbRect = activeThumb.getBoundingClientRect()
+      const scrollOffset =
+        thumbRect.left - containerRect.left - container.clientWidth / 2 + activeThumb.clientWidth / 2
+      container.scrollBy({ left: scrollOffset, behavior: 'smooth' })
+    } else if (container.scrollHeight > container.clientHeight) {
+      // Desktop vertical scrolling
+      const containerRect = container.getBoundingClientRect()
+      const thumbRect = activeThumb.getBoundingClientRect()
+      const scrollOffset =
+        thumbRect.top - containerRect.top - container.clientHeight / 2 + activeThumb.clientHeight / 2
+      container.scrollBy({ top: scrollOffset, behavior: 'smooth' })
+    }
+  }, [activeIndex])
 
   useEffect(() => {
     if (selectedIndex === undefined) {
@@ -192,18 +217,24 @@ export default function ProductGallery({
 
   return (
     <div className="flex flex-col md:flex-row gap-3 lg:gap-4 items-start w-full">
-      {/* Thumbnails (Vertical on desktop, Horizontal on mobile) */}
+      {/* Thumbnails (Vertical on desktop, Horizontal on mobile - 4 visible on mobile) */}
       {displayImages.length > 1 && (
-        <div className="order-2 md:order-1 flex md:flex-col gap-4 overflow-x-auto md:overflow-y-auto p-1 scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden w-full md:w-[78px] lg:w-[86px] md:max-h-[500px] lg:max-h-[520px] shrink-0">
+        <div
+          ref={thumbnailsContainerRef}
+          className="order-2 md:order-1 flex md:flex-col gap-2 sm:gap-2.5 md:gap-3.5 overflow-x-auto md:overflow-y-auto p-1 scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden w-full md:w-[78px] lg:w-[86px] md:max-h-[500px] lg:max-h-[520px] shrink-0"
+        >
           {displayImages.map((img, index) => {
             const isActive = activeIndex === index
             return (
               <button
                 key={index}
+                ref={(el) => {
+                  thumbnailRefs.current[index] = el
+                }}
                 type="button"
                 onClick={() => setActiveIndex(index)}
                 aria-label={`Select image ${index + 1}`}
-                className={`relative w-18 h-18 sm:w-20 sm:h-20 md:w-full md:h-[84px] lg:h-[86px] shrink-0 rounded-[5px] overflow-hidden transition-all duration-200 bg-white cursor-pointer ${
+                className={`relative flex-[0_0_calc((100%-24px)/4)] max-w-[86px] aspect-square sm:flex-none sm:w-[78px] sm:h-[78px] md:w-full md:h-[84px] lg:h-[86px] shrink-0 rounded-[5px] overflow-hidden transition-all duration-200 bg-white cursor-pointer ${
                   isActive
                     ? 'ring-2 ring-[#FF007A] ring-offset-2 ring-offset-white shadow-sm opacity-100 scale-[1.02]'
                     : 'border border-gray-200/90 hover:border-gray-400 opacity-60 hover:opacity-100'
@@ -214,7 +245,7 @@ export default function ProductGallery({
                   alt={`Thumbnail ${index + 1}`}
                   fill
                   loader={productLoaderFor(img)}
-                  sizes="92px"
+                  sizes="120px"
                   loading={index === 0 ? 'eager' : 'lazy'}
                   onError={handleImageError}
                   className="h-full w-full object-cover object-center"
@@ -230,7 +261,29 @@ export default function ProductGallery({
       )}
 
       {/* Main Image Showcase Card (Reduced height on desktop) */}
-      <div className="order-1 md:order-2 relative w-full flex-1 aspect-[1/1] sm:aspect-[4/4.3] md:aspect-[4/3.8] lg:aspect-[4/5.4] md:max-h-[480px] lg:max-h-[500px] rounded-[5px]  overflow-hidden bg-white border border-gray-200/80 shadow-sm select-none group flex items-center justify-center">
+      <div className="order-1 md:order-2 relative w-full flex-1 aspect-[1/1] sm:aspect-[4/4.3] md:aspect-[4/3.8] lg:aspect-[4/5.4] md:max-h-[480px] lg:max-h-[500px] rounded-[5px] overflow-hidden bg-white border border-gray-200/80 shadow-sm select-none group flex items-center justify-center">
+        {/* Badge Pill: Top-Left on both mobile and desktop - Only render if badge exists */}
+        {badge && (
+          <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 pointer-events-none">
+            <span
+              className={`inline-block text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-[5px] border shadow-sm ${
+                badge.toUpperCase() === "HOT" ||
+                badge.toUpperCase() === "HOT BESTSELLER" ||
+                badge.toUpperCase() === "BESTSELLER"
+                  ? "bg-[#FFF0E3] text-[#F47B20] border-[#F47B20]/30"
+                  : badge.toUpperCase() === "TRENDING"
+                  ? "bg-[#DDF6F8] text-[#0891B2] border-[#36B8C5]/30"
+                  : badge.toUpperCase() === "EXCLUSIVE" ||
+                    badge.toUpperCase() === "LIMITED" ||
+                    badge.toUpperCase() === "LIMITED EDITION"
+                  ? "bg-[#F3E8FF] text-[#9333EA] border-[#9333EA]/30"
+                  : "bg-[#FFF0F6] text-[#F72585] border-[#F72585]/20"
+              }`}
+            >
+              {badge}
+            </span>
+          </div>
+        )}
         {/* Neon Graffiti Splatter & Spray Art Backdrop */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
           {/* Subtle concrete texture overlay */}

@@ -15,7 +15,10 @@ async function recalculateProductReviewStats(adminClient: any, productId: string
     .eq('product_id', productId)
     .eq('is_approved', true)
 
-  if (error) throw new Error(error.message)
+  if (error) {
+    console.error('Error fetching approved reviews:', error)
+    return
+  }
 
   const reviewCount = allReviews?.length || 0
   const averageRating =
@@ -23,26 +26,27 @@ async function recalculateProductReviewStats(adminClient: any, productId: string
       ? Number((allReviews.reduce((sum: number, review: any) => sum + Number(review.rating), 0) / reviewCount).toFixed(1))
       : 0
 
-  const { error: updateError } = await adminClient
+  await adminClient
     .from('products')
     .update({
       rating: averageRating,
       review_count: reviewCount,
     })
     .eq('id', productId)
-
-  if (updateError) throw new Error(updateError.message)
 }
 
 export async function approveReview(
-  _prevState: ActionResult,
-  formData: FormData
+  _prevState: any,
+  formDataOrId: FormData | string
 ): Promise<ActionResult> {
   try {
     const admin = await requireAdmin()
     if (admin.ok === false) return { error: admin.error }
 
-    const reviewId = formData.get('id') as string
+    const reviewId = typeof formDataOrId === 'string'
+      ? formDataOrId
+      : (formDataOrId.get('id') as string)
+
     if (!reviewId) return { error: 'Review ID is required.' }
 
     const { data: reviewData, error: reviewError } = await admin.adminClient
@@ -65,7 +69,7 @@ export async function approveReview(
     await recalculateProductReviewStats(admin.adminClient, reviewData.product_id)
 
     revalidatePath('/admin/reviews')
-    revalidatePath('/shop/[id]')
+    revalidatePath(`/shop/${reviewData.product_id}`)
     return { success: true }
   } catch (error: any) {
     return { error: error?.message || 'Failed to approve review.' }
@@ -73,25 +77,26 @@ export async function approveReview(
 }
 
 export async function deleteReview(
-  _prevState: ActionResult,
-  formData: FormData
+  _prevState: any,
+  formDataOrId: FormData | string
 ): Promise<ActionResult> {
   try {
     const admin = await requireAdmin()
     if (admin.ok === false) return { error: admin.error }
 
-    const reviewId = formData.get('id') as string
+    const reviewId = typeof formDataOrId === 'string'
+      ? formDataOrId
+      : (formDataOrId.get('id') as string)
+
     if (!reviewId) return { error: 'Review ID is required.' }
 
-    const { data: reviewData, error: reviewError } = await admin.adminClient
+    const { data: reviewData } = await admin.adminClient
       .from('reviews')
       .select('product_id')
       .eq('id', reviewId)
-      .single()
+      .maybeSingle()
 
-    if (reviewError || !reviewData?.product_id) {
-      return { error: reviewError?.message || 'Review not found.' }
-    }
+    const productId = reviewData?.product_id
 
     const { error: deleteError } = await admin.adminClient
       .from('reviews')
@@ -100,10 +105,12 @@ export async function deleteReview(
 
     if (deleteError) return { error: deleteError.message }
 
-    await recalculateProductReviewStats(admin.adminClient, reviewData.product_id)
+    if (productId) {
+      await recalculateProductReviewStats(admin.adminClient, productId)
+      revalidatePath(`/shop/${productId}`)
+    }
 
     revalidatePath('/admin/reviews')
-    revalidatePath('/shop/[id]')
     return { success: true }
   } catch (error: any) {
     return { error: error?.message || 'Failed to delete review.' }

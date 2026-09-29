@@ -21,13 +21,7 @@ export default async function NewProductPage() {
     : [{ data: [] }, { data: [] }]
 
   return (
-    <div className="max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-ink">New Product</h1>
-        <p className="text-ink/60 text-sm mt-0.5">
-          Add a new product to your catalog
-        </p>
-      </div>
+    <div className="w-full space-y-5">
       <ProductForm categories={categories || []} otherProducts={otherProducts || []} />
     </div>
   )

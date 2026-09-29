@@ -1,120 +1,37 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { Heart } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
+import {
+  ShopProduct,
+  productMatchesCategory,
+} from "@/lib/shopProducts";
+import { productLoaderFor } from "@/lib/imagekitImage";
+import TrendingProductCard from "./TrendingProductCard";
 
 // ==========================================
-// TYPES & DATA
+// FILTER TABS (Clean category labels from shop - without counts & badges)
 // ==========================================
-
-export interface TrendingProduct {
-  id: string;
-  name: string;
-  price: number;
-  originalPrice: number;
-  discount: string;
-  image: string;
-  link: string;
-  categories: string[];
-  colors: { name: string; hex: string }[];
-}
 
 const FILTER_TABS = [
   { id: "all", label: "ALL" },
-  { id: "oversized", label: "OVERSIZED" },
-  { id: "graphic", label: "GRAPHIC" },
-  { id: "minimal", label: "MINIMAL" },
-  { id: "anime", label: "ANIME" },
-  { id: "quote", label: "QUOTE" },
-  { id: "street", label: "STREET" },
+  { id: "new-arrivals", label: "NEW ARRIVALS" },
+  { id: "bestseller", label: "HOT BESTSELLER" },
+  { id: "trending", label: "TRENDING" },
+  { id: "exclusive", label: "EXCLUSIVE" },
 ];
 
-const TRENDING_PRODUCTS: TrendingProduct[] = [
-  {
-    id: "prod-1",
-    name: "Neon Bunny Oversized Tee",
-    price: 699,
-    originalPrice: 999,
-    discount: "30% OFF",
-    image: "/images/trending_now/trending_now1.jpeg",
-    link: "/shop?product=neon-bunny-oversized-tee",
-    categories: ["all", "oversized", "street", "anime"],
-    colors: [
-      { name: "Black", hex: "#0B0D0E" },
-      { name: "Cyan", hex: "#36B8C5" },
-      { name: "Pink", hex: "#F72585" },
-      { name: "Light Grey", hex: "#E8E8E6" },
-    ],
-  },
-  {
-    id: "prod-2",
-    name: "Chase Your Dreams Tee",
-    price: 799,
-    originalPrice: 1099,
-    discount: "27% OFF",
-    image: "/images/trending_now/trending_now2.jpeg",
-    link: "/shop?product=chase-your-dreams-tee",
-    categories: ["all", "quote", "oversized", "minimal"],
-    colors: [
-      { name: "Black", hex: "#0B0D0E" },
-      { name: "Cream", hex: "#F5EBE6" },
-    ],
-  },
-  {
-    id: "prod-3",
-    name: "Reality Check Tee",
-    price: 699,
-    originalPrice: 999,
-    discount: "30% OFF",
-    image: "/images/trending_now/trending_now3.jpeg",
-    link: "/shop?product=reality-check-tee",
-    categories: ["all", "graphic", "anime", "street"],
-    colors: [
-      { name: "Black", hex: "#0B0D0E" },
-      { name: "Charcoal", hex: "#1A1E20" },
-    ],
-  },
-  {
-    id: "prod-4",
-    name: "Teenzos Classic Tee",
-    price: 599,
-    originalPrice: 899,
-    discount: "33% OFF",
-    image: "/images/trending_now/trending_now4.jpeg",
-    link: "/shop?product=teenzos-classic-tee",
-    categories: ["all", "minimal", "street", "anime"],
-    colors: [
-      { name: "White", hex: "#FFFFFF" },
-      { name: "Cyan", hex: "#36B8C5" },
-      { name: "Black", hex: "#0B0D0E" },
-    ],
-  },
-  {
-    id: "prod-5",
-    name: "Good Days Ahead Tee",
-    price: 699,
-    originalPrice: 999,
-    discount: "30% OFF",
-    image: "/images/trending_now/trending_now5.jpeg",
-    link: "/shop?product=good-days-ahead-tee",
-    categories: ["all", "street", "graphic", "anime"],
-    colors: [
-      { name: "Midnight", hex: "#1F2428" },
-      { name: "Black", hex: "#0B0D0E" },
-      { name: "White", hex: "#FFFFFF" },
-    ],
-  },
-];
+interface TrendingNowProps {
+  initialProducts?: any[];
+}
 
-// ==========================================
-// COMPONENT
-// ==========================================
-
-export default function TrendingNow() {
+export default function TrendingNow({ initialProducts = [] }: TrendingNowProps) {
   const [activeTab, setActiveTab] = useState("all");
+  const [visibleCount, setVisibleCount] = useState(5);
   const [wishlist, setWishlist] = useState<Record<string, boolean>>({});
   const [selectedColorMap, setSelectedColorMap] = useState<Record<string, number>>({});
   const [addedAnimation, setAddedAnimation] = useState<Record<string, boolean>>({});
@@ -122,15 +39,155 @@ export default function TrendingNow() {
   const { addToCart } = useCart();
   const { showToast } = useToast();
 
-  const filteredProducts = useMemo(() => {
-    if (activeTab === "all") return TRENDING_PRODUCTS;
-    return TRENDING_PRODUCTS.filter((p) => p.categories.includes(activeTab));
-  }, [activeTab]);
+  // Combine active DB products with shop catalogue (DB takes first precedence)
+  const allProducts: ShopProduct[] = useMemo(() => {
+    const existingIds = new Set<string>();
+    const list: ShopProduct[] = [];
 
-  const toggleWishlist = (id: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setWishlist((prev) => ({ ...prev, [id]: !prev[id] }));
+    // 1. First include live Supabase DB products
+    if (Array.isArray(initialProducts) && initialProducts.length > 0) {
+      initialProducts.forEach((p) => {
+        if (!existingIds.has(p.id) && p.is_active !== false) {
+          existingIds.add(p.id);
+          const price = Number(p.price || 999);
+          const oldPrice = Number(p.oldPrice || p.sale_price || Math.round(price * 1.25));
+          const discount = p.discount || (oldPrice > price ? `${Math.round(((oldPrice - price) / oldPrice) * 100)}% OFF` : "20% OFF");
+          
+          list.push({
+            id: p.id,
+            slug: p.slug || p.id,
+            name: p.name,
+            category_id: p.category_id || "t-shirts",
+            category_name: p.category_name || "Streetwear",
+            price,
+            oldPrice,
+            discount,
+            image_url: p.image_url || p.featured_image_url || "/image.png",
+            badge: p.badge || undefined,
+            rating: Number(p.rating) || 0,
+            review_count: Number(p.review_count) || 0,
+            sizes: p.sizes || ["S", "M", "L", "XL"],
+            in_stock: true,
+            is_active: true,
+            colors: p.colors || [],
+            color_name: p.color_name,
+            product_images: p.product_images,
+            gallery_images: p.gallery_images,
+            product_variants: p.product_variants,
+            description: p.description,
+          });
+        }
+      });
+    }
+
+
+    return list;
+  }, [initialProducts]);
+
+  const allFilteredProducts = useMemo(() => {
+    if (!activeTab || activeTab === "all") return allProducts;
+
+    return allProducts.filter((p) => {
+      const b = (p.badge || "").toLowerCase().trim();
+      const tab = activeTab.toLowerCase().trim();
+
+      if (tab === "new-arrivals") {
+        return b.includes("new") || p.curated_category === "new-arrivals" || p.category_id === "new-arrivals";
+      }
+      if (tab === "bestseller") {
+        return b.includes("best") || b.includes("hot") || p.curated_category === "bestseller" || p.category_id === "bestseller";
+      }
+      if (tab === "trending") {
+        return b.includes("trend") || b.includes("fire") || p.curated_category === "trending" || p.category_id === "trending";
+      }
+      if (tab === "exclusive") {
+        return b.includes("exclus") || b.includes("limit") || p.curated_category === "exclusive" || p.category_id === "exclusive";
+      }
+
+      return productMatchesCategory(p, activeTab);
+    });
+  }, [allProducts, activeTab]);
+
+  const visibleProducts = useMemo(() => {
+    return allFilteredProducts.slice(0, visibleCount);
+  }, [allFilteredProducts, visibleCount]);
+
+  const hasMore = visibleCount < allFilteredProducts.length;
+
+  const handleTabChange = (tabId: string) => {
+    setActiveTab(tabId);
+    setVisibleCount(5);
+  };
+
+  const handleLoadMore = () => {
+    setVisibleCount((prev) => prev + 5);
+  };
+
+  // Wishlist local persistence (exact same as Shop page)
+  useEffect(() => {
+    const loadWishlist = () => {
+      try {
+        const saved = localStorage.getItem("teenzos_wishlist");
+        if (saved) setWishlist(JSON.parse(saved));
+        else setWishlist({});
+      } catch (e) {}
+    };
+
+    loadWishlist();
+    window.addEventListener("teenzos-wishlist-change", loadWishlist);
+    window.addEventListener("storage", loadWishlist);
+    return () => {
+      window.removeEventListener("teenzos-wishlist-change", loadWishlist);
+      window.removeEventListener("storage", loadWishlist);
+    };
+  }, []);
+
+  const toggleWishlist = (id: string) => {
+    try {
+      let currentMap: Record<string, boolean> = {};
+      const saved = localStorage.getItem("teenzos_wishlist");
+      if (saved) {
+        try {
+          currentMap = JSON.parse(saved);
+        } catch {}
+      }
+
+      const nextVal = !currentMap[id];
+      currentMap[id] = nextVal;
+      localStorage.setItem("teenzos_wishlist", JSON.stringify(currentMap));
+
+      // Cache product for Wishlist page
+      const found = allProducts.find((p) => p.id === id);
+      if (found) {
+        let cachedProducts: Record<string, any> = {};
+        try {
+          const raw = localStorage.getItem("teenzos_wishlist_products");
+          if (raw) cachedProducts = JSON.parse(raw);
+        } catch {}
+        if (nextVal) {
+          cachedProducts[id] = found;
+        } else {
+          delete cachedProducts[id];
+        }
+        localStorage.setItem("teenzos_wishlist_products", JSON.stringify(cachedProducts));
+      }
+
+      // Update state immediately
+      setWishlist({ ...currentMap });
+
+      // Notify Header & other components asynchronously so React doesn't trigger setState-in-render conflict
+      setTimeout(() => {
+        window.dispatchEvent(new Event("teenzos-wishlist-change"));
+      }, 0);
+
+      if (nextVal) {
+        showToast("Saved to wishlist!", "success");
+      } else {
+        showToast("Removed from wishlist", "info");
+      }
+    } catch (e) {
+      console.error("Wishlist toggle error:", e);
+    }
   };
 
   const handleSelectColor = (productId: string, colorIdx: number, e: React.MouseEvent) => {
@@ -139,27 +196,36 @@ export default function TrendingNow() {
     setSelectedColorMap((prev) => ({ ...prev, [productId]: colorIdx }));
   };
 
-  const handleAddToCart = (product: TrendingProduct, e: React.MouseEvent) => {
+  const handleAddToCart = (product: ShopProduct, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    const selectedColor = product.colors[selectedColorMap[product.id] || 0]?.name || "Standard";
+    const selectedColor =
+      product.colors && product.colors.length > 0
+        ? product.colors[selectedColorMap[product.id] || 0]?.name
+        : "Standard";
 
-    addToCart({
-      id: product.id,
-      name: `${product.name} (${selectedColor})`,
-      price: product.price,
-      image_url: product.image,
-      category_name: "Trending Tees",
-    });
+    addToCart(
+      {
+        id: product.id,
+        name: `${product.name}${selectedColor && selectedColor !== "Standard" ? ` (${selectedColor})` : ""}`,
+        price: product.price,
+        image_url: product.image_url,
+        category_name: product.category_name || "Streetwear",
+        variant_name: selectedColor || "Standard",
+      },
+      {
+        event: e,
+        sourceElement: e.currentTarget as HTMLElement,
+      }
+    );
 
-    // Trigger local feedback animation
     setAddedAnimation((prev) => ({ ...prev, [product.id]: true }));
     setTimeout(() => {
       setAddedAnimation((prev) => ({ ...prev, [product.id]: false }));
-    }, 1200);
+    }, 1400);
 
-    showToast(`Added ${product.name} (${selectedColor}) to bag!`, "success");
+    showToast(`Added ${product.name} to bag!`, "success");
   };
 
   return (
@@ -171,7 +237,7 @@ export default function TrendingNow() {
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10">
         
         {/* ── Section Header & Filter Navigation ── */}
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-7 sm:mb-9">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 sm:gap-5 mb-7 sm:mb-9">
           {/* Title Area */}
           <div className="flex flex-col">
             <span className="font-body font-medium text-[11px] sm:text-xs md:text-[13px] text-[#6B7073] tracking-[0.24em] uppercase mb-1.5 ml-0.5">
@@ -182,15 +248,15 @@ export default function TrendingNow() {
             </h2>
           </div>
 
-          {/* Filter Pills & View All */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+          {/* Filter Pills (No counts, no badges - clean & responsive) */}
+          <div className="flex items-center gap-2 sm:gap-2.5 overflow-x-auto pb-1 max-w-full scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden flex-nowrap sm:flex-wrap">
             {FILTER_TABS.map((tab) => {
               const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-[5px] text-[11px] sm:text-xs font-bold tracking-wider uppercase transition-all duration-200 ${
+                  onClick={() => handleTabChange(tab.id)}
+                  className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-[5px] text-[11px] sm:text-xs font-bold tracking-wider uppercase transition-all duration-200 whitespace-nowrap shrink-0 cursor-pointer ${
                     isActive
                       ? "bg-[#0B0D0E] text-white shadow-sm"
                       : "bg-[#F1F1EF] text-[#6B7073] hover:bg-[#E8E8E6] hover:text-[#0B0D0E]"
@@ -201,10 +267,10 @@ export default function TrendingNow() {
               );
             })}
 
-            {/* View All Action */}
+            {/* View All Action (Desktop) */}
             <Link
-              href="/shop?filter=trending"
-              className="group hidden sm:inline-flex items-center gap-1.5 font-body font-bold text-xs sm:text-sm text-[#0B0D0E] hover:text-[#F72585] transition-colors ml-2"
+              href={activeTab === "all" ? "/shop" : `/shop?category=${activeTab}`}
+              className="group hidden sm:inline-flex items-center gap-1.5 font-body font-bold text-xs sm:text-sm text-[#0B0D0E] hover:text-[#F72585] transition-colors ml-2 whitespace-nowrap"
             >
               <span>View All</span>
               <span className="transform group-hover:translate-x-1 transition-transform duration-200 text-sm leading-none">
@@ -214,154 +280,42 @@ export default function TrendingNow() {
           </div>
         </div>
 
-        {/* ── Products Grid (5 Columns on Desktop with Increased Width & Height) ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-5 md:gap-6">
-          {filteredProducts.map((product) => {
-            const isLiked = !!wishlist[product.id];
-            const activeColorIdx = selectedColorMap[product.id] || 0;
-            const isAdded = !!addedAnimation[product.id];
-
-            return (
-              <div
-                key={product.id}
-                className="group relative flex flex-col justify-between bg-white rounded-[5px] border border-stone-200/90 p-3 sm:p-3.5 hover:border-stone-400 hover:shadow-xl transition-all duration-300"
-              >
-                {/* ── Image Box with rounded-[5px] ── */}
-                <div className="relative aspect-[3.6/4.3] w-full rounded-[5px] bg-[#F7F7F5] border border-stone-200/60 overflow-hidden mb-3 p-3 flex items-center justify-center">
-                  <Link href={product.link} className="block relative w-full h-full">
-                    <Image
-                      src={product.image}
-                      alt={product.name}
-                      fill
-                      priority
-                      unoptimized
-                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-                      className="object-contain object-center transform group-hover:scale-105 transition-transform duration-500 ease-out"
-                    />
-                  </Link>
-
-                  {/* Wishlist Heart Button */}
-                  <button
-                    onClick={(e) => toggleWishlist(product.id, e)}
-                    aria-label={isLiked ? "Remove from wishlist" : "Add to wishlist"}
-                    className="absolute top-2 right-2 z-10 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center text-[#F72585] border border-[#F72585] hover:text-[#F72585] hover:bg-white shadow-sm transition-all duration-200"
-                  >
-                    <svg
-                      className="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform active:scale-125"
-                      viewBox="0 0 24 24"
-                      fill={isLiked ? "#F72585" : "none"}
-                      stroke={isLiked ? "#F72585" : "currentColor"}
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-                    </svg>
-                  </button>
-                </div>
-
-                {/* ── Product Info & Bottom Actions ── */}
-                <div className="flex flex-col flex-grow justify-between px-0.5">
-                  <div>
-                    {/* Name */}
-                    <Link
-                      href={product.link}
-                      className="font-body font-semibold text-[#0B0D0E] text-[13.5px] sm:text-[14.5px] md:text-[15px] leading-snug line-clamp-1 hover:text-[#F72585] transition-colors"
-                    >
-                      {product.name}
-                    </Link>
-
-                    {/* Price & Discount */}
-                    <div className="flex items-center gap-2 mt-1.5 mb-3">
-                      <span className="font-body font-black text-[#0B0D0E] text-[14.5px] sm:text-[16px]">
-                        ₹{product.price}
-                      </span>
-                      <span className="font-body text-[#8B9196] text-[11.5px] sm:text-[12.5px] line-through">
-                        ₹{product.originalPrice}
-                      </span>
-                      <span className="font-body font-bold text-[#F72585] text-[11px] sm:text-[12px] tracking-tight">
-                        {product.discount}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Bottom Row: Color Swatches with Space + Add to Cart Button */}
-                  <div className="flex items-center justify-between pt-2.5 border-t border-stone-100 mt-auto">
-                    {/* Color Swatches with Generous Spacing */}
-                    <div className="flex items-center gap-2 sm:gap-2.5">
-                      {product.colors.map((colorObj, cIdx) => {
-                        const isSelectedColor = cIdx === activeColorIdx;
-                        return (
-                          <button
-                            key={cIdx}
-                            onClick={(e) => handleSelectColor(product.id, cIdx, e)}
-                            aria-label={`Select color ${colorObj.name}`}
-                            title={colorObj.name}
-                            className={`w-4 h-4 sm:w-4.5 sm:h-4.5 rounded-full transition-all duration-200 cursor-pointer ${
-                              isSelectedColor
-                                ? "ring-2 ring-[#0B0D0E] ring-offset-2 scale-110 shadow-sm"
-                                : "border border-stone-300 hover:scale-115 hover:border-stone-500 opacity-90 hover:opacity-100"
-                            }`}
-                            style={{ backgroundColor: colorObj.hex }}
-                          />
-                        );
-                      })}
-                    </div>
-
-                    {/* Add to Cart Icon Button */}
-                    <button
-                      onClick={(e) => handleAddToCart(product, e)}
-                      aria-label={`Add ${product.name} to cart`}
-                      className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center transition-all duration-200 shrink-0 ${
-                        isAdded
-                          ? "bg-[#36B8C5] text-white scale-110 shadow-md"
-                          : "bg-[#0B0D0E] hover:bg-[#F72585] text-white shadow-sm hover:shadow-md hover:scale-105 active:scale-95"
-                      }`}
-                      title="Add to cart"
-                    >
-                      {isAdded ? (
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                          viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      ) : (
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
-                          />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-            );
-          })}
+        {/* ── Products Grid: 2 columns on mobile, 3 on tablet, 5 on desktop ── */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
+          {visibleProducts.map((product) => (
+            <TrendingProductCard
+              key={product.id}
+              product={product}
+              isWishlisted={!!wishlist[product.id]}
+              isLiked={!!wishlist[product.id]}
+              onToggleWishlist={toggleWishlist}
+            />
+          ))}
         </div>
 
-        {/* Mobile View All Button */}
-        <div className="mt-8 text-center sm:hidden">
-          <Link
-            href="/shop?filter=trending"
-            className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-[5px] border border-stone-300 font-body font-bold text-xs text-[#0B0D0E] hover:bg-black hover:text-white transition-colors"
-          >
-            <span>View All Most Loved Tees</span>
-            <span>→</span>
-          </Link>
+        {/* Load More Button & View All */}
+        <div className="mt-8 sm:mt-10 flex flex-col items-center justify-center gap-3">
+          {hasMore && (
+            <button
+              type="button"
+              onClick={handleLoadMore}
+              className="inline-flex items-center justify-center gap-2 px-8 sm:px-12 py-3 sm:py-3.5 rounded-[5px] bg-[#0B0D0E] hover:bg-[#F72585] text-white font-body font-bold text-xs sm:text-sm tracking-wider uppercase shadow-md hover:shadow-lg transition-all duration-200 active:scale-95 cursor-pointer w-full sm:w-auto"
+            >
+              <span>Load More</span>
+              <span className="text-sm">↓</span>
+            </button>
+          )}
+
+          {/* Mobile View All Button */}
+          <div className="w-full text-center sm:hidden">
+            <Link
+              href={activeTab === "all" ? "/shop" : `/shop?category=${activeTab}`}
+              className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-[5px] border border-stone-300 font-body font-bold text-xs text-[#0B0D0E] hover:bg-black hover:text-white transition-colors"
+            >
+              <span>View All in Shop</span>
+              <span>→</span>
+            </Link>
+          </div>
         </div>
 
       </div>

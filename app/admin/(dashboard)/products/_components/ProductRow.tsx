@@ -62,7 +62,21 @@ export default function ProductRow({
       </td>
       <td className="px-6 py-3.5">
         {product.badge ? (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+          <span
+            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
+              product.badge.toLowerCase().includes('hot') ||
+              product.badge.toLowerCase().includes('bestseller')
+                ? 'bg-[#FFF0E3] text-[#F47B20] border border-[#F47B20]/30'
+                : product.badge.toLowerCase().includes('new')
+                ? 'bg-[#FFE1ED] text-[#F72585] border border-[#F72585]/30'
+                : product.badge.toLowerCase().includes('trend')
+                ? 'bg-[#DDF6F8] text-[#0891B2] border border-[#36B8C5]/30'
+                : product.badge.toLowerCase().includes('exclus') ||
+                  product.badge.toLowerCase().includes('limit')
+                ? 'bg-[#F3E8FF] text-[#9333EA] border border-[#9333EA]/30'
+                : 'bg-orange-100 text-orange-700'
+            }`}
+          >
             {product.badge}
           </span>
         ) : (

@@ -293,7 +293,7 @@ export default function TrustBar() {
         </div>
 
         {/* Mobile & Tablet View (< 1024px): Responsive clean grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:hidden gap-y-4 gap-x-3 sm:gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:hidden gap-y-4 gap-x-3 sm:gap-6 max-w-[500px] sm:max-w-none mx-auto">
           {TRUST_FEATURES.map((item, idx) => {
             const Icon = item.icon;
             const isLastOddOnMobile = idx === TRUST_FEATURES.length - 1;
@@ -301,8 +301,8 @@ export default function TrustBar() {
             return (
               <div
                 key={item.id}
-                className={`flex items-center gap-2.5 sm:gap-3 ${
-                  isLastOddOnMobile ? "col-span-2 sm:col-span-1 justify-center sm:justify-start" : ""
+                className={`flex items-center justify-center gap-2.5 sm:gap-3 ${
+                  isLastOddOnMobile ? "col-span-2 sm:col-span-1" : ""
                 }`}
               >
                 <div className="shrink-0 text-[#0B0D0E]">

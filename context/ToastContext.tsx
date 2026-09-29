@@ -32,9 +32,9 @@ const ICON_BADGE: Record<ToastType, string> = {
 }
 
 const TOAST_BORDER: Record<ToastType, string> = {
-  success: 'border-emerald-500/30 shadow-[0_8px_24px_-4px_rgba(16,185,129,0.25)]',
-  error: 'border-rose-500/30 shadow-[0_8px_24px_-4px_rgba(244,63,94,0.25)]',
-  info: 'border-[#36B8C5]/30 shadow-[0_8px_24px_-4px_rgba(54,184,197,0.25)]',
+  success: 'border-emerald-500/40 shadow-[0_10px_30px_-5px_rgba(0,0,0,0.6),0_0_15px_-2px_rgba(16,185,129,0.3)]',
+  error: 'border-rose-500/40 shadow-[0_10px_30px_-5px_rgba(0,0,0,0.6),0_0_15px_-2px_rgba(244,63,94,0.3)]',
+  info: 'border-[#36B8C5]/40 shadow-[0_10px_30px_-5px_rgba(0,0,0,0.6),0_0_15px_-2px_rgba(54,184,197,0.3)]',
 }
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
@@ -58,13 +58,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {/* Floating Toast Notification Stack - Highest Z-Index, Top Centered on Mobile, Top-Right on Desktop */}
       <div
         style={{ zIndex: 9999999 }}
-        className="fixed top-3.5 sm:top-5 inset-x-0 sm:inset-x-auto sm:right-5 flex flex-col items-center sm:items-end gap-2 pointer-events-none px-3 sm:px-0 transition-all duration-300"
+        className="fixed top-3 sm:top-4 inset-x-0 sm:inset-x-auto sm:right-6 flex flex-col items-center sm:items-end gap-2 pointer-events-none px-3 sm:px-0 transition-all duration-300"
       >
         {toasts.map((toast) => (
           <div
             key={toast.id}
             role="status"
-            className={`pointer-events-auto group relative flex items-center gap-2 sm:gap-2.5 bg-[#0B0D0E]/95 text-white backdrop-blur-md rounded-full border ${TOAST_BORDER[toast.type]} pl-2.5 pr-3 py-1.5 sm:py-2 max-w-[calc(100vw-24px)] sm:max-w-md shadow-2xl transition-all duration-200 select-none animate-toast-enter`}
+            className={`pointer-events-auto group relative flex items-center gap-2.5 sm:gap-3 bg-[#111315] text-white rounded-full border ${TOAST_BORDER[toast.type]} pl-2.5 pr-3.5 py-1.5 sm:py-2 max-w-[calc(100vw-24px)] sm:max-w-md shadow-2xl transition-all duration-200 select-none animate-toast-enter`}
             style={{
               animation: 'toastSlideDown 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards',
             }}
@@ -75,14 +75,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             </div>
 
             {/* Message Text */}
-            <p className="text-xs sm:text-[13px] font-medium text-white/95 leading-snug tracking-tight pr-1 break-words">
+            <p className="text-xs sm:text-[13px] font-semibold text-white/95 leading-snug tracking-tight pr-1 break-words">
               {toast.message}
             </p>
 
             {/* Quick Dismiss Button */}
             <button
               onClick={() => dismissToast(toast.id)}
-              className="w-5 h-5 rounded-full flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-colors shrink-0 -mr-0.5 ml-auto"
+              className="w-5 h-5 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/15 transition-colors shrink-0 -mr-1 ml-auto"
               aria-label="Dismiss notification"
             >
               <X className="w-3 h-3" />

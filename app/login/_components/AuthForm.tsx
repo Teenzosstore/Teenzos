@@ -7,18 +7,7 @@ import {
   sendPasswordReset,
   sendEmailOtp,
   verifyEmailOtp,
-  verifyPhoneOtp,
 } from '@/actions/auth'
-import {
-  getFirebaseAuth,
-  isFirebaseClientConfigured,
-  prepareFirebasePhoneAuth,
-} from '@/lib/firebase/client'
-import {
-  ConfirmationResult,
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
-} from 'firebase/auth'
 import {
   User,
   UserPlus,
@@ -70,10 +59,8 @@ export default function AuthForm({
   const [otpIdentifier, setOtpIdentifier] = useState('')
   const [otpCode, setOtpCode] = useState('')
   const [otpSent, setOtpSent] = useState(false)
+  const [otpModeType, setOtpModeType] = useState<'LOGIN' | 'REGISTER'>('LOGIN')
   const [resendTimer, setResendTimer] = useState(0)
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null)
-  const recaptchaVerifier = useRef<RecaptchaVerifier | null>(null)
-
   // Feedback states
   const [isBusy, setIsBusy] = useState(false)
   const [error, setError] = useState(initialError || '')
@@ -86,21 +73,13 @@ export default function AuthForm({
     return () => clearInterval(timer)
   }, [resendTimer])
 
-  const clearRecaptcha = useCallback(() => {
-    try {
-      recaptchaVerifier.current?.clear()
-    } catch (_) {}
-    recaptchaVerifier.current = null
-  }, [])
-
-  useEffect(() => {
-    return () => clearRecaptcha()
-  }, [clearRecaptcha])
-
   // Reset errors when switching tab or view
   const switchTab = (nextTab: TabMode) => {
     setTab(nextTab)
     setView('DEFAULT')
+    setOtpSent(false)
+    setOtpCode('')
+    setOtpModeType(nextTab)
     setError('')
     setSuccess('')
   }
@@ -215,6 +194,52 @@ export default function AuthForm({
     }
   }
 
+  // Handle Registration with Email OTP (Saves OTP in Supabase email_otps table & sends Brevo email)
+  const handleRegisterWithOtp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setSuccess('')
+
+    if (!fullName.trim()) {
+      setError('Please enter your full name.')
+      return
+    }
+    if (!identifier.trim() || !identifier.includes('@')) {
+      setError('Please enter a valid email address.')
+      return
+    }
+    if (!password || password.length < 6) {
+      setError('Password must be at least 6 characters long.')
+      return
+    }
+    if (!agreeTerms) {
+      setError('Please agree to the Terms of Service and Privacy Policy.')
+      return
+    }
+
+    setIsBusy(true)
+    try {
+      const emailVal = identifier.trim().toLowerCase()
+      const res = await sendEmailOtp(emailVal, 'REGISTER', fullName.trim())
+      if (res?.error) {
+        setError(res.error)
+        setIsBusy(false)
+        return
+      }
+
+      setOtpModeType('REGISTER')
+      setOtpIdentifier(emailVal)
+      setOtpSent(true)
+      setResendTimer(60)
+      setView('OTP_MODE')
+      setSuccess(`Verification code sent to ${emailVal}! Enter the 6-digit code below.`)
+    } catch (err: any) {
+      setError(err?.message || 'Failed to send OTP verification code.')
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
   // Handle OTP Send (for users who prefer OTP)
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -223,46 +248,25 @@ export default function AuthForm({
 
     const val = otpIdentifier.trim()
     if (!val) {
-      setError('Enter your email or 10-digit phone number.')
+      setError('Please enter your email address.')
+      return
+    }
+
+    if (!val.includes('@')) {
+      setError('Please enter a valid email address to receive OTP code.')
       return
     }
 
     setIsBusy(true)
     try {
-      if (val.includes('@')) {
-        const res = await sendEmailOtp(val.toLowerCase(), 'LOGIN')
-        if (res?.error) {
-          setError(res.error)
-        } else {
-          setOtpSent(true)
-          setResendTimer(60)
-          setSuccess(`Verification code sent to ${val}`)
-        }
+      const emailVal = val.toLowerCase()
+      const res = await sendEmailOtp(emailVal, otpModeType, fullName.trim() || undefined)
+      if (res?.error) {
+        setError(res.error)
       } else {
-        // Phone OTP with Firebase
-        const digits = val.replace(/\D/g, '')
-        const phoneFormatted = digits.length === 10 ? `+91${digits}` : `+${digits}`
-
-        if (!isFirebaseClientConfigured()) {
-          setError('Phone authentication is not configured. Please use email.')
-          setIsBusy(false)
-          return
-        }
-
-        await prepareFirebasePhoneAuth()
-        const auth = getFirebaseAuth()
-        const container = document.getElementById('teenzos-recaptcha-anchor')
-        if (!container) throw new Error('Recaptcha anchor missing.')
-
-        clearRecaptcha()
-        const verifier = new RecaptchaVerifier(auth, container, { size: 'invisible' })
-        recaptchaVerifier.current = verifier
-
-        const confirmation = await signInWithPhoneNumber(auth, phoneFormatted, verifier)
-        setConfirmationResult(confirmation)
         setOtpSent(true)
         setResendTimer(60)
-        setSuccess(`Verification code sent to +91 ${digits.slice(-10)}`)
+        setSuccess(`Verification code sent to ${val}`)
       }
     } catch (err: any) {
       setError(err?.message || 'Failed to send OTP code.')
@@ -271,7 +275,7 @@ export default function AuthForm({
     }
   }
 
-  // Handle OTP Verification
+  // Handle OTP Verification (Validates against Supabase email_otps table)
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -284,38 +288,24 @@ export default function AuthForm({
 
     setIsBusy(true)
     try {
-      const val = otpIdentifier.trim()
-      if (val.includes('@')) {
-        const res = await verifyEmailOtp(val.toLowerCase(), otpCode, redirectTo)
-        if (res?.error) {
-          setError(res.error)
-          setIsBusy(false)
-          return
-        }
-        setSuccess('Verified successfully! Redirecting...')
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new Event('rawflex-login-status-change'))
-          window.location.assign(getSafeRedirectPath(redirectTo))
-        }
-      } else {
-        if (!confirmationResult) {
-          setError('Please request a fresh OTP.')
-          setIsBusy(false)
-          return
-        }
-        const credential = await confirmationResult.confirm(otpCode)
-        const token = await credential.user.getIdToken()
-        const res = await verifyPhoneOtp(token, 'LOGIN', 'NO_REDIRECT')
-        if (res?.error) {
-          setError(res.error)
-          setIsBusy(false)
-          return
-        }
-        setSuccess('Verified successfully! Redirecting...')
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new Event('rawflex-login-status-change'))
-          window.location.assign(getSafeRedirectPath(redirectTo))
-        }
+      const val = otpIdentifier.trim().toLowerCase()
+      const res = await verifyEmailOtp(
+        val,
+        otpCode,
+        redirectTo,
+        fullName.trim() || undefined,
+        registerPhone.trim() || undefined,
+        password || undefined
+      )
+      if (res?.error) {
+        setError(res.error)
+        setIsBusy(false)
+        return
+      }
+      setSuccess('Account verified successfully! Redirecting...')
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('rawflex-login-status-change'))
+        window.location.assign(getSafeRedirectPath(redirectTo))
       }
     } catch (err: any) {
       setError(err?.message || 'Verification failed. Please check the code.')
@@ -325,7 +315,6 @@ export default function AuthForm({
 
   return (
     <div className="relative w-full rounded-[28px] sm:rounded-[32px] bg-white p-6 sm:p-8 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.12)] border border-gray-100/90 transition-all duration-300">
-      <div id="teenzos-recaptcha-anchor" />
 
       {/* Top Segmented Tab Switch (Login / Register) */}
       <div className="bg-[#F1F3F5] p-1.5 rounded-2xl grid grid-cols-2 gap-1.5 mb-5 sm:mb-6">
@@ -370,10 +359,12 @@ export default function AuthForm({
         ) : view === 'OTP_MODE' ? (
           <>
             <h1 className="text-2xl sm:text-[28px] font-bold text-[#0B0D0E] tracking-tight font-sans text-center">
-              OTP Verification
+              {otpModeType === 'REGISTER' ? 'Verify Your Email' : 'OTP Verification'}
             </h1>
             <p className="text-xs sm:text-sm text-gray-500 mt-1.5 leading-relaxed font-sans text-center">
-              Sign in securely with a one-time passcode sent to your phone or email.
+              {otpModeType === 'REGISTER'
+                ? 'Enter the 6-digit verification code sent to your email.'
+                : 'Sign in securely with a one-time passcode sent to your email.'}
             </p>
           </>
         ) : tab === 'LOGIN' ? (
@@ -518,21 +509,33 @@ export default function AuthForm({
             )}
           </button>
 
-          {/* Subtle OTP Option */}
-          <div className="text-center pt-2">
-            <button
-              type="button"
-              onClick={() => {
-                setView('OTP_MODE')
-                setOtpIdentifier(identifier)
-                setError('')
-                setSuccess('')
-              }}
-              className="text-[11px] sm:text-xs text-gray-400 hover:text-gray-700 transition-colors underline underline-offset-4"
-            >
-              Prefer to sign in with OTP instead?
-            </button>
+          {/* Divider */}
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-100" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="bg-white px-2.5 text-gray-400 font-medium">Or</span>
+            </div>
           </div>
+
+          {/* Prominent OTP Login Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setOtpModeType('LOGIN')
+              setOtpIdentifier(identifier)
+              setOtpSent(false)
+              setOtpCode('')
+              setView('OTP_MODE')
+              setError('')
+              setSuccess('')
+            }}
+            className="w-full h-11 sm:h-12 rounded-xl bg-gray-50 hover:bg-gray-100 active:scale-[0.99] text-gray-800 font-semibold text-xs sm:text-sm border border-gray-200/80 flex items-center justify-center gap-2 transition-all cursor-pointer"
+          >
+            <KeyRound className="w-4 h-4 text-[#F72585]" />
+            <span>Sign in with Email OTP</span>
+          </button>
 
           {/* Bottom Prompt */}
           <div className="text-center mt-5 sm:mt-6 text-xs sm:text-sm text-gray-500 font-medium">
@@ -553,7 +556,7 @@ export default function AuthForm({
       {/* 2. REGISTER FORM                                         */}
       {/* ======================================================== */}
       {view === 'DEFAULT' && tab === 'REGISTER' && (
-        <form onSubmit={handleRegister} className="space-y-4">
+        <form onSubmit={handleRegisterWithOtp} className="space-y-4">
           <div>
             <label
               htmlFor="reg_name"
@@ -680,15 +683,26 @@ export default function AuthForm({
             {isBusy ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Creating account...</span>
+                <span>Sending OTP...</span>
               </>
             ) : (
               <>
-                <span>Register Now</span>
+                <span>Create Account (Verify Email OTP)</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
           </button>
+
+          <div className="text-center pt-2">
+            <button
+              type="button"
+              onClick={handleRegister}
+              disabled={isBusy}
+              className="text-[11px] sm:text-xs text-gray-400 hover:text-gray-700 transition-colors underline underline-offset-4 cursor-pointer"
+            >
+              Or direct register without email OTP
+            </button>
+          </div>
 
           <div className="text-center mt-5 sm:mt-6 text-xs sm:text-sm text-gray-500 font-medium">
             Already have an account?{' '}
@@ -778,17 +792,17 @@ export default function AuthForm({
                   htmlFor="otp_id"
                   className="block text-xs sm:text-sm font-bold text-[#0B0D0E] mb-1.5"
                 >
-                  Email or Phone Number
+                  Email Address
                 </label>
                 <div className="relative group">
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-[#F72585] transition-colors pointer-events-none" />
                   <input
                     id="otp_id"
-                    type="text"
+                    type="email"
                     required
                     value={otpIdentifier}
                     onChange={(e) => setOtpIdentifier(e.target.value)}
-                    placeholder="you@example.com or 10-digit mobile"
+                    placeholder="you@example.com"
                     className="w-full h-11 sm:h-12 pl-11 pr-4 rounded-xl border border-gray-200 bg-white text-sm text-[#0B0D0E] placeholder:text-gray-400 focus:outline-none focus:border-[#F72585] focus:ring-2 focus:ring-[#F72585]/15 transition-all font-sans"
                   />
                 </div>
@@ -817,13 +831,14 @@ export default function AuthForm({
                   type="button"
                   onClick={() => {
                     setView('DEFAULT')
+                    setOtpSent(false)
                     setError('')
                     setSuccess('')
                   }}
                   className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-[#F72585] hover:text-[#D91668] transition-colors cursor-pointer"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  <span>Back to Password Login</span>
+                  <span>{otpModeType === 'REGISTER' ? 'Back to Registration Form' : 'Back to Password Login'}</span>
                 </button>
               </div>
             </form>
@@ -845,7 +860,7 @@ export default function AuthForm({
                       setError('')
                       setSuccess('')
                     }}
-                    className="text-xs font-semibold text-[#F72585] hover:underline"
+                    className="text-xs font-semibold text-[#F72585] hover:underline cursor-pointer"
                   >
                     Change recipient
                   </button>
@@ -878,7 +893,7 @@ export default function AuthForm({
                   </>
                 ) : (
                   <>
-                    <span>Verify & Login</span>
+                    <span>{otpModeType === 'REGISTER' ? 'Verify & Activate Account' : 'Verify & Login'}</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -889,7 +904,7 @@ export default function AuthForm({
                   type="button"
                   onClick={handleSendOtp}
                   disabled={isBusy || resendTimer > 0}
-                  className="text-xs font-semibold text-gray-500 hover:text-[#F72585] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="text-xs font-semibold text-gray-500 hover:text-[#F72585] transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {resendTimer > 0 ? `Resend code in ${resendTimer}s` : 'Resend code'}
                 </button>

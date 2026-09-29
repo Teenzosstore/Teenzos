@@ -1,6 +1,8 @@
 import { getGlobalFaqs } from '@/actions/global_faqs'
 import { GlobalFaqsEditor } from '@/components/admin/GlobalFaqsEditor'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata = {
   title: 'Global FAQs | Teenzosstore Admin',
 }

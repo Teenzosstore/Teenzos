@@ -32,14 +32,12 @@ const HELP_LINKS = [
   },
   { label: "Shipping", href: "/policies/shipping" },
   { label: "Returns", href: "/policies/refund" },
-  { label: "Size Guide", href: "/shop" },
   { label: "FAQ", href: "/faq" },
 ];
 
 const COMPANY_LINKS = [
   { label: "About Us", href: "/about" },
   { label: "Contact Us", href: "/contact" },
-  { label: "Our Story", href: "/about" },
   { label: "Privacy Policy", href: "/policies/privacy" },
   { label: "Terms & Conditions", href: "/policies/terms" },
 ];
@@ -48,7 +46,7 @@ export default function Footer() {
   return (
     <footer
       aria-label="Site Footer"
-      className="w-full bg-[#0B0D0E] text-white pt-14 pb-8 sm:pt-16 sm:pb-10 border-t border-white/5 select-none"
+      className="w-full bg-[#0B0D0E] text-white pt-14 pb-24 sm:pb-24 lg:pb-10 border-t border-white/5 select-none"
     >
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10">
         {/* =========================================================

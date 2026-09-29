@@ -10,7 +10,7 @@ import {
   updateHomeBannerImageLink,
 } from '@/actions/admin/homeBanner'
 import { Trash2, Plus, Image as ImageIcon, Loader2, Link as LinkIcon } from 'lucide-react'
-import { CldUploadWidget } from 'next-cloudinary'
+import { ImageKitUploadWidget } from '@/components/ImageKitUploadWidget'
 
 type BannerImage = {
   id: string
@@ -48,7 +48,7 @@ export function HomeBannerManager({
   }
 
   const handleUploadSuccess = (result: any) => {
-    const imageUrl = result.info.secure_url
+    const imageUrl = (result.url || result.info?.secure_url)
 
     startTransition(async () => {
       const res = await createHomeBannerImage(imageUrl, '')
@@ -119,11 +119,9 @@ export function HomeBannerManager({
           </div>
 
           {images.length < 8 ? (
-            <CldUploadWidget
-              signatureEndpoint="/api/cloudinary/sign"
+            <ImageKitUploadWidget
               options={{
                 maxFiles: 1,
-                resourceType: 'image',
                 folder: "rawflex/home-banner",
                 clientAllowedFormats: ['jpg', 'jpeg', 'png', 'webp'],
               }}
@@ -139,7 +137,7 @@ export function HomeBannerManager({
                   Add Image
                 </button>
               )}
-            </CldUploadWidget>
+            </ImageKitUploadWidget>
           ) : (
             <span className="text-sm font-medium text-orange-600 bg-orange-50 px-3 py-1 rounded-full border border-orange-200">
               Maximum 8 images reached

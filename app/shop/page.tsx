@@ -5,7 +5,7 @@ import ShopGrid from "./_components/ShopGrid";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { selectDisplayVariant } from "@/lib/productVariants";
-import { SHOP_PRODUCTS } from "@/lib/shopProducts";
+import { slugify } from "@/lib/shopProducts";
 
 export const metadata = {
   title: "Shop Streetwear Collection | TEENZOS",
@@ -33,7 +33,7 @@ export default async function ShopPage({
     let productsQuery = supabase
       .from("products")
       .select(`
-        id, name, slug, category_id, is_active, badge, rating, price, oldPrice, featured_image_url, color_group_id, color_name, created_at,
+        id, name, slug, category_id, is_active, badge, rating, review_count, price, oldPrice, featured_image_url, color_group_id, color_name, created_at,
         product_images ( image_url ),
         product_variants ( id, variant_name, price, original_price, stock_quantity, is_active )
       `)
@@ -54,6 +54,7 @@ export default async function ShopPage({
     const { data: cData } = await adminSupabase
       .from("categories")
       .select("*")
+      .eq("is_active", true)
       .order("name");
     if (cData) categoriesData = cData;
   } catch (err) {
@@ -79,14 +80,15 @@ export default async function ShopPage({
       id: p.id,
       variant_id: variant?.id || null,
       name: p.name,
-      slug: p.slug,
+      slug: p.slug || slugify(p.name) || p.id,
       category_id: p.category_id,
       is_active: p.is_active,
       image_url: p.featured_image_url || p.product_images?.[0]?.image_url || "/image.png",
       price: variant?.price || p.price || 0,
       oldPrice: variant?.original_price || p.oldPrice || undefined,
       badge: p.badge,
-      rating: p.rating || 5,
+      rating: Number(p.rating) || 0,
+      review_count: Number(p.review_count) || 0,
       colors: parseProductColors(p.color_name),
     };
   });

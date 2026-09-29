@@ -44,6 +44,7 @@ export function InquiriesList({ initialInquiries }: { initialInquiries: any[] })
       {inquiries.map((inquiry) => {
         const isUnread = inquiry.status === 'unread'
         const isExpanded = expandedId === inquiry.id
+        const phone = inquiry.phone || (inquiry.message?.match(/Phone:\s*([^\n\r]+)/i)?.[1]?.trim())
 
         return (
           <div 
@@ -78,7 +79,7 @@ export function InquiriesList({ initialInquiries }: { initialInquiries: any[] })
                     )}
                   </div>
                   <p className={`text-sm truncate mt-0.5 ${isUnread ? 'font-medium text-ink/80' : 'text-ink/60'}`}>
-                    {inquiry.email}
+                    {inquiry.email} {phone ? `• ${phone}` : ''}
                   </p>
                 </div>
               </div>
@@ -117,11 +118,23 @@ export function InquiriesList({ initialInquiries }: { initialInquiries: any[] })
                 <div className="bg-panel p-5 rounded-xl border border-cream-line text-sm text-ink/80 whitespace-pre-wrap leading-relaxed shadow-sm">
                   {inquiry.message}
                 </div>
-                <div className="mt-4 flex justify-end">
+                <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
+                  {phone && (
+                    <a 
+                      href={`https://wa.me/${phone.replace(/[^0-9]/g, '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-sm font-semibold rounded-lg transition-colors"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      Reply on WhatsApp
+                    </a>
+                  )}
                   <a 
                     href={`mailto:${inquiry.email}`}
-                    className="inline-flex items-center justify-center px-4 py-2 bg-panel text-ink text-sm font-semibold rounded-lg hover:bg-panel2 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-panel text-ink text-sm font-semibold rounded-lg hover:bg-panel2 transition-colors border border-cream-line"
                   >
+                    <Mail className="w-4 h-4 text-ink/50" />
                     Reply via Email
                   </a>
                 </div>

@@ -40,6 +40,25 @@ export async function createCoupon(coupon: Omit<Coupon, 'id' | 'created_at'>) {
   if (error) return { success: false, error: error.message }
   
   revalidatePath('/admin/settings/coupons')
+  revalidatePath('/admin/announcements')
+  revalidatePath('/', 'layout')
+  return { success: true }
+}
+
+export async function toggleCouponStatus(id: string, is_active: boolean) {
+  const admin = await requireAdmin()
+  if (admin.ok === false) return { success: false, error: admin.error }
+  const supabase = admin.adminClient
+  const { error } = await supabase
+    .from('coupons')
+    .update({ is_active })
+    .eq('id', id)
+
+  if (error) return { success: false, error: error.message }
+
+  revalidatePath('/admin/settings/coupons')
+  revalidatePath('/admin/announcements')
+  revalidatePath('/', 'layout')
   return { success: true }
 }
 
@@ -55,6 +74,8 @@ export async function deleteCoupon(id: string) {
   if (error) return { success: false, error: error.message }
   
   revalidatePath('/admin/settings/coupons')
+  revalidatePath('/admin/announcements')
+  revalidatePath('/', 'layout')
   return { success: true }
 }
 

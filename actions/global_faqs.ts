@@ -55,9 +55,11 @@ export async function addGlobalFaq(formData: FormData) {
     return { success: false, error: error.message }
   }
 
+  revalidatePath('/faq')
   revalidatePath('/admin/settings/faqs')
   revalidatePath('/product/[slug]', 'page')
   revalidatePath('/contact')
+  revalidatePath('/', 'layout')
   return { success: true, data: data[0] }
 }
 
@@ -83,9 +85,11 @@ export async function updateGlobalFaq(id: string, formData: FormData) {
     return { success: false, error: error.message }
   }
 
+  revalidatePath('/faq')
   revalidatePath('/admin/settings/faqs')
   revalidatePath('/product/[slug]', 'page')
   revalidatePath('/contact')
+  revalidatePath('/', 'layout')
   return { success: true, data: data[0] }
 }
 
@@ -103,8 +107,11 @@ export async function deleteGlobalFaq(id: string) {
     return { success: false, error: error.message }
   }
 
+  revalidatePath('/faq')
   revalidatePath('/admin/settings/faqs')
   revalidatePath('/product/[slug]', 'page')
+  revalidatePath('/contact')
+  revalidatePath('/', 'layout')
   return { success: true }
 }
 
@@ -113,8 +120,7 @@ export async function updateGlobalFaqOrders(orders: { id: string; display_order:
   if (admin.ok === false) return { success: false, error: admin.error }
   const supabase = admin.adminClient
 
-  // Supabase doesn't have a built-in bulk update for different values on same query cleanly via RPC without creating one.
-  // We'll update them individually since it's a small array.
+  // Update display order for each item
   for (const item of orders) {
     const { error } = await supabase
       .from('global_faqs')
@@ -126,7 +132,10 @@ export async function updateGlobalFaqOrders(orders: { id: string; display_order:
     }
   }
 
+  revalidatePath('/faq')
   revalidatePath('/admin/settings/faqs')
   revalidatePath('/product/[slug]', 'page')
+  revalidatePath('/contact')
+  revalidatePath('/', 'layout')
   return { success: true }
 }

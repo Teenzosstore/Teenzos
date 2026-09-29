@@ -1,92 +1,165 @@
+import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
-import ProfileManager from './_components/ProfileManager'
+import CustomerAccountView, {
+  CustomerProfileData,
+  CustomerAddressData,
+  CustomerOrderData,
+} from './_components/CustomerAccountView'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { parseSignedRawflexSession, rawflexSessionCookieNames } from '@/lib/auth/session'
 
 export const metadata = {
-  title: 'My Profile | Teenzosstore',
-  description: 'Manage your shipping address, contact details, and order tracking.',
+  title: 'Customer Account | TeenZos',
+  description: 'Manage your TeenZos orders, live tracking, shipping addresses, and account settings.',
 }
 
 export default async function CustomerProfilePage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  let adminProfile = null
-  let orders = []
-  if (user) {
-    const adminSupabase = createAdminClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-    const { data: profile } = await adminSupabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single()
+  let currentUserId = user?.id
+  let currentUserEmail = user?.email
+  let currentUserName = (user?.user_metadata?.full_name as string) || null
 
-    const { data: address } = await adminSupabase
-      .from('addresses')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('is_default', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+  // Check fallback session cookie
+  if (!user) {
+    const cookieStore = await cookies()
+    const sessionPayload = cookieStore.get(rawflexSessionCookieNames.session)?.value
+    const sessionSig = cookieStore.get(rawflexSessionCookieNames.signature)?.value
+    const customSession = parseSignedRawflexSession(sessionPayload, sessionSig)
+    if (customSession?.id) {
+      currentUserId = customSession.id
+      currentUserEmail = customSession.email || null
+      currentUserName = customSession.full_name || null
+    }
+  }
 
-    if (profile) {
-      adminProfile = {
-        ...profile,
-        phone: profile.phone || address?.phone || '',
-        alternatePhone: address?.alternate_phone || '',
-        street: address?.address_line_1 || '',
-        city: address?.city || '',
-        state: address?.state || '',
-        zipCode: address?.postal_code || '',
+  // Secure Auth Guard: If not logged in, redirect to login page immediately
+  if (!currentUserId) {
+    redirect('/login?redirect=/profile')
+  }
+
+  let initialProfile: CustomerProfileData | null = null
+  let initialAddresses: CustomerAddressData[] = []
+  let initialOrders: CustomerOrderData[] = []
+
+  const adminSupabase = createAdminClient()
+
+  // 1. Fetch user profile
+  const { data: profile } = await adminSupabase
+    .from('profiles')
+    .select('*')
+    .eq('id', currentUserId)
+    .maybeSingle()
+
+  if (profile) {
+    initialProfile = {
+      id: profile.id,
+      full_name: profile.full_name || currentUserName || '',
+      email: profile.email || currentUserEmail || '',
+      phone: profile.phone || '',
+      avatar_url: profile.avatar_url || (user?.user_metadata?.avatar_url as string) || 'theme-pink',
+    }
+  } else {
+    initialProfile = {
+      id: currentUserId,
+      full_name: currentUserName || '',
+      email: currentUserEmail || '',
+      phone: '',
+      avatar_url: (user?.user_metadata?.avatar_url as string) || 'theme-pink',
+    }
+  }
+
+  // 2. Fetch all user addresses
+  const { data: addresses } = await adminSupabase
+    .from('addresses')
+    .select('*')
+    .eq('user_id', currentUserId)
+    .order('is_default', { ascending: false })
+    .order('created_at', { ascending: false })
+
+  if (addresses && addresses.length > 0) {
+    initialAddresses = addresses as CustomerAddressData[]
+  }
+
+  // 3. Fetch user orders with items
+  const { data: userOrders } = await adminSupabase
+    .from('orders')
+    .select(`
+      *,
+      order_items (
+        id,
+        product_id,
+        variant_id,
+        product_name,
+        variant_name,
+        price_at_purchase,
+        quantity,
+        line_total
+      )
+    `)
+    .eq('user_id', currentUserId)
+    .order('created_at', { ascending: false })
+
+  if (userOrders && userOrders.length > 0) {
+    // Collect product ids to attach images
+    const productIds = Array.from(
+      new Set(
+        userOrders
+          .flatMap((o) => o.order_items || [])
+          .map((item) => item.product_id)
+          .filter(Boolean)
+      )
+    )
+
+    let productImagesMap: Record<string, string> = {}
+    if (productIds.length > 0) {
+      const { data: products } = await adminSupabase
+        .from('products')
+        .select('id, featured_image_url')
+        .in('id', productIds)
+
+      if (products) {
+        products.forEach((p) => {
+          if (p.featured_image_url) {
+            productImagesMap[p.id] = p.featured_image_url
+          }
+        })
       }
     }
 
-    const { data: userOrders } = await adminSupabase
-      .from('orders')
-      .select(`
-        *,
-        order_items (
-          id,
-          product_id,
-          variant_id,
-          product_name,
-          variant_name,
-          price_at_purchase,
-          quantity,
-          line_total
-        )
-      `)
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-    
-    if (userOrders) {
-      orders = userOrders
-    }
+    initialOrders = userOrders.map((order) => ({
+      ...order,
+      order_items: (order.order_items || []).map((item: any) => ({
+        ...item,
+        image_url:
+          (item.product_id && productImagesMap[item.product_id]) || '',
+      })),
+    })) as CustomerOrderData[]
   }
 
   return (
     <>
       <Header />
-      <main className="min-h-screen bg-cream pt-28 pb-16 md:pt-36 md:pb-24">
-        <div className="max-w-3xl mx-auto px-5">
-          <div className="text-center mb-8">
-            <div className="eyebrow justify-center inline-flex items-center gap-2">
-              <span className="h-px w-6 bg-gold" />
-              Customer Account
-              <span className="h-px w-6 bg-gold" />
-            </div>
-            <h1 className="section-heading mt-3">My Profile</h1>
-            <p className="section-sub mt-2">
-              Manage your default shipping address and order details for quicker checkouts.
-            </p>
-          </div>
-
-          <ProfileManager adminProfile={adminProfile} orders={orders} />
-        </div>
-      </main>
+      <div className="pt-24 sm:pt-28 md:pt-32 bg-[#F8F9FA]">
+        <CustomerAccountView
+          initialUser={{
+            id: currentUserId,
+            email: currentUserEmail,
+            full_name: currentUserName,
+            avatar_url: initialProfile?.avatar_url || null,
+          }}
+          initialProfile={initialProfile}
+          initialAddresses={initialAddresses}
+          initialOrders={initialOrders}
+          isLoggedIn={true}
+        />
+      </div>
       <Footer />
     </>
   )

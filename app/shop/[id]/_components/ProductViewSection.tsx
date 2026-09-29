@@ -35,6 +35,7 @@ type ProductViewSectionProps = {
     title: string
   } | null
   reviews?: any[]
+  currentUser?: { id: string; name?: string } | null
 }
 
 export default function ProductViewSection({
@@ -46,6 +47,7 @@ export default function ProductViewSection({
   categoryId = 'hoodies',
   sizeChart = null,
   reviews = [],
+  currentUser = null,
 }: ProductViewSectionProps) {
   const uniqueColors = product.colors || []
 
@@ -60,7 +62,7 @@ export default function ProductViewSection({
     if (images && images.length > 0) {
       return images.map((img) => img.image_url)
     }
-    return ['/images/products/bunny-graffiti-hoodie.jpg']
+    return ['/image.png']
   }, [images])
 
   // Handle color change and try to match with an image
@@ -96,8 +98,6 @@ export default function ProductViewSection({
     return [
       { label: 'Fabric Details', value: '380 GSM Heavyweight Cotton Fleece' },
       { label: 'Fit Profile', value: 'Oversized Streetwear Silhouette' },
-      { label: 'Hood & Neck', value: 'Double-Layered Hood with Reinforced Eyelets' },
-      { label: 'Graphic Technique', value: 'High-Density Screen Graffiti Print' },
       { label: 'Stitching Details', value: 'Double-Needle Reinforced Seams' },
       { label: 'Care Instructions', value: 'Machine wash cold inside out, tumble dry low' },
       { label: 'Country of Origin', value: 'Crafted with Pride in India' },
@@ -157,6 +157,8 @@ export default function ProductViewSection({
         features={product.features}
         specifications={combinedSpecs}
         reviews={reviews}
+        sizeChart={sizeChart}
+        currentUser={currentUser}
       />
     </div>
   )

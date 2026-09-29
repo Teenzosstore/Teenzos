@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextRequest, NextResponse } from 'next/server'
+import { sendNewsletterWelcomeEmail } from '@/lib/email'
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,22 +9,23 @@ export async function POST(request: NextRequest) {
 
     if (!email || !email.includes('@')) {
       return NextResponse.json(
-        { error: 'Invalid email address' },
+        { error: 'Please enter a valid email address' },
         { status: 400 }
       )
     }
 
+    const cleanEmail = email.toLowerCase().trim()
     const supabase = createAdminClient()
 
     const { error } = await supabase
       .from('newsletter_subscriptions')
-      .insert({ email: email.toLowerCase().trim() })
+      .insert({ email: cleanEmail })
 
     if (error) {
       if (error.code === '23505') {
         return NextResponse.json(
-          { error: 'Email already subscribed' },
-          { status: 409 }
+          { error: "You're already on the VIP list!", alreadySubscribed: true },
+          { status: 200 }
         )
       }
       console.error('Newsletter subscription error:', error)
@@ -33,7 +35,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({ success: true, message: 'Successfully subscribed!' })
+    // Send Welcome & 10% Discount email asynchronously via Brevo
+    sendNewsletterWelcomeEmail({ toEmail: cleanEmail }).catch((err) => {
+      console.error('Welcome email dispatch background error:', err)
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: 'Successfully subscribed! Check your inbox for your 10% discount code.',
+    })
   } catch (err) {
     console.error('Newsletter API error:', err)
     return NextResponse.json(

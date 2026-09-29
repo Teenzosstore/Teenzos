@@ -6,8 +6,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { cookies } from 'next/headers'
 import { createSignedRawflexSession, rawflexSessionCookieNames, type RawflexSession } from '@/lib/auth/session'
-import { sendTransactionalEmail } from '@/lib/email'
-import { isFirebaseAuthEmulatorEnabled } from '@/lib/firebase/emulator'
+import { sendTransactionalEmail, sendOtpEmail, sendWelcomeEmail } from '@/lib/email'
 
 export type AuthResult = {
   error?: string
@@ -18,18 +17,6 @@ type SupabaseAuthUserWithPhone = {
   id: string
   email?: string | null
   phone?: string | null
-}
-
-type FirebaseLookupUser = {
-  localId?: string
-  phoneNumber?: string
-}
-
-type FirebaseLookupResponse = {
-  users?: FirebaseLookupUser[]
-  error?: {
-    message?: string
-  }
 }
 
 function getErrorDetails(error: unknown) {
@@ -143,38 +130,6 @@ async function findSupabaseAuthUserByPhone(adminAuth: ReturnType<typeof createAd
   return null
 }
 
-async function getVerifiedFirebasePhoneNumber(firebaseIdToken: string) {
-  if (isFirebaseAuthEmulatorEnabled()) {
-    const { getFirebaseAdminAuth } = await import('@/lib/firebase/admin')
-    const decodedToken = await getFirebaseAdminAuth().verifyIdToken(firebaseIdToken)
-    return decodedToken.phone_number || ''
-  }
-
-  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY
-  if (!apiKey) {
-    throw new Error('Firebase API key is not configured.')
-  }
-
-  const response = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ idToken: firebaseIdToken }),
-      cache: 'no-store',
-    }
-  )
-
-  const result = (await response.json()) as FirebaseLookupResponse
-
-  if (!response.ok || result.error) {
-    throw new Error(result.error?.message || 'Firebase token lookup failed.')
-  }
-
-  return result.users?.[0]?.phoneNumber || ''
-}
 
 export async function login(
   _prevState: AuthResult,
@@ -269,6 +224,12 @@ export async function register(
   }
 
   await clearRawflexSessionCookie()
+
+  // Send Welcome Email asynchronously via Brevo
+  sendWelcomeEmail({
+    toEmail: email.trim().toLowerCase(),
+    fullName: fullName.trim(),
+  }).catch((err) => console.error('Error sending welcome email:', err))
 
   const redirectTo = formData.get('redirect_to') as string
   revalidatePath('/', 'layout')
@@ -420,6 +381,12 @@ export async function registerWithCredentials(
       full_name: trimmedName,
       role: 'customer',
     })
+
+    // Send Welcome Email asynchronously via Brevo
+    sendWelcomeEmail({
+      toEmail: trimmedEmail,
+      fullName: trimmedName,
+    }).catch((err) => console.error('Error sending welcome email:', err))
   }
 
   revalidatePath('/', 'layout')
@@ -447,93 +414,80 @@ export async function sendEmailOtp(
   mode: 'LOGIN' | 'REGISTER',
   fullName?: string
 ): Promise<AuthResult> {
-  const supabase = await createClient()
   const adminSupabase = createAdminClient()
 
-  if (!email) {
-    return { error: 'Email is required' }
+  if (!email || !email.trim()) {
+    return { error: 'Email address is required.' }
   }
+
+  const trimmedEmail = email.trim().toLowerCase()
 
   if (mode === 'LOGIN') {
     const { data: profile } = await adminSupabase
       .from('profiles')
       .select('id')
-      .eq('email', email)
+      .ilike('email', trimmedEmail)
       .maybeSingle()
 
-    if (!profile) {
-      return { error: 'User does not exist, first create an account' }
+    let userFound = !!profile
+    if (!userFound) {
+      try {
+        const { data: userList } = await adminSupabase.auth.admin.listUsers()
+        userFound = !!(userList?.users as any[])?.some((u: any) => u.email?.toLowerCase() === trimmedEmail)
+      } catch (err) {}
+    }
+
+    if (!userFound) {
+      return { error: 'No account found with this email. Please register first or check your email.' }
+    }
+  }
+
+  if (mode === 'REGISTER') {
+    const { data: profile } = await adminSupabase
+      .from('profiles')
+      .select('id')
+      .ilike('email', trimmedEmail)
+      .maybeSingle()
+
+    if (profile) {
+      return { error: 'An account with this email already exists. Please log in.' }
     }
   }
 
   const otp = Math.floor(100000 + Math.random() * 900000).toString()
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
 
-  // Clean old OTPs for this email & clean all expired OTPs globally
-  await adminSupabase.from('email_otps').delete().eq('email', email)
-  await adminSupabase.from('email_otps').delete().lt('expires_at', new Date().toISOString())
+  // Clean records older than 24 hours (1 day) automatically
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  await adminSupabase.from('email_otps').delete().lt('created_at', twentyFourHoursAgo)
 
-  // Insert OTP record
+  // Insert OTP record directly into Supabase email_otps table
   const { error: dbError } = await adminSupabase
     .from('email_otps')
     .insert({
-      email,
+      email: trimmedEmail,
       otp,
       full_name: fullName || null,
-      expires_at: expiresAt
+      expires_at: expiresAt,
     })
 
   if (dbError) {
-    console.error('OTP Save DB Error:', dbError)
-    return { error: 'Failed to generate verification code. Please try again.' }
+    console.error('OTP Save DB Error in Supabase email_otps:', dbError)
+    return { error: 'Failed to save verification code in Supabase: ' + dbError.message }
   }
 
   try {
-    await sendTransactionalEmail({
-      to: { email },
-      subject: 'Your Verification Code - RAWFLEX',
-      htmlContent: `
-          <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px; border: 1px solid #262926; border-radius: 12px; background-color: #0a0909; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.4);">
-            <!-- Logo Header -->
-            <div style="margin-bottom: 24px;">
-              <h1 style="color: #EAE6E2; font-size: 26px; font-weight: 800; letter-spacing: 2px; margin: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">RAWFLEX</h1>
-            </div>
-
-            <hr style="border: 0; border-top: 1px solid #262926; margin: 24px 0;" />
-
-            <!-- Message Heading -->
-            <h2 style="color: #EAE6E2; font-size: 20px; font-weight: bold; margin-bottom: 8px;">Verification Code</h2>
-            <p style="color: #EAE6E2; opacity: 0.7; font-size: 14px; line-height: 1.6; margin-top: 0; max-width: 380px; margin-left: auto; margin-right: auto;">
-              Please enter the 6-digit OTP code below to secure your login session.
-            </p>
-
-            <!-- OTP Block -->
-            <div style="margin: 32px 0;">
-              <div style="display: inline-block; font-size: 34px; font-weight: bold; letter-spacing: 8px; color: #D4A82C; padding: 16px 32px; border: 1.5px solid #D4A82C; border-radius: 10px; background-color: #141614;">
-                ${otp}
-              </div>
-            </div>
-
-            <!-- Expiry notice -->
-            <p style="color: #EAE6E2; opacity: 0.55; font-size: 12px; line-height: 1.5; margin: 24px 0;">
-              This verification code is valid for <strong style="color: #EAE6E2;">10 minutes</strong>.<br />
-              If you did not request this verification, please ignore this email.
-            </p>
-
-            <hr style="border: 0; border-top: 1px solid #262926; margin: 24px 0;" />
-
-            <!-- Footer -->
-            <p style="color: #D4A82C; opacity: 0.8; font-size: 11px; margin: 0;">
-              &copy; ${new Date().getFullYear()} RAWFLEX. All rights reserved.
-            </p>
-          </div>
-        `,
+    await sendOtpEmail({
+      toEmail: trimmedEmail,
+      otp,
+      mode,
+      name: fullName,
     })
 
     return { success: true }
   } catch (e: any) {
-    console.error('Email Send Error:', e)
-    return { error: 'Failed to send verification email: ' + e.message }
+    console.error('Email Send Error via Brevo:', e)
+    return { error: 'Failed to send verification email: ' + (e?.message || 'Check email configuration') }
   }
 }
 
@@ -542,37 +496,52 @@ export async function verifyEmailOtp(
   otp: string,
   redirectTo?: string,
   fullName?: string,
-  phone?: string
+  phone?: string,
+  password?: string
 ): Promise<AuthResult> {
   const supabase = await createClient()
   const adminSupabase = createAdminClient()
 
   if (!email || !otp) {
-    return { error: 'Email and OTP code are required' }
+    return { error: 'Email and OTP code are required.' }
   }
 
-  const { data: records } = await adminSupabase
+  const trimmedEmail = email.trim().toLowerCase()
+  const trimmedOtp = otp.trim()
+
+  const { data: records, error: fetchErr } = await adminSupabase
     .from('email_otps')
     .select('*')
-    .eq('email', email)
+    .eq('email', trimmedEmail)
     .order('created_at', { ascending: false })
 
-  const record = records?.[0]
-  if (!record) {
-    return { error: 'No OTP requested for this email' }
+  if (fetchErr) {
+    console.error('Fetch OTP error from Supabase email_otps:', fetchErr)
+    return { error: 'Failed to query OTP from Supabase.' }
   }
 
-  if (record.otp !== otp) {
-    return { error: 'Invalid OTP code' }
+  if (!records || records.length === 0) {
+    return { error: 'No OTP requested for this email. Please request a new code.' }
   }
 
-  if (new Date(record.expires_at) < new Date()) {
-    await adminSupabase.from('email_otps').delete().eq('email', email)
-    return { error: 'OTP has expired. Please request a new one.' }
+  // Find matching active OTP
+  const matchingRecord = records.find(
+    (r) => r.otp === trimmedOtp && new Date(r.expires_at) >= new Date()
+  )
+
+  if (!matchingRecord) {
+    const expiredMatch = records.find((r) => r.otp === trimmedOtp)
+    if (expiredMatch) {
+      return { error: 'This OTP has expired or already been used. Please request a new one.' }
+    }
+    return { error: 'Invalid OTP code. Please enter the 6-digit code received on your email.' }
   }
 
-  // OTP verified, delete it
-  await adminSupabase.from('email_otps').delete().eq('email', email)
+  // Expire the OTP record so it cannot be re-used, but keep row in Supabase email_otps table for records!
+  await adminSupabase
+    .from('email_otps')
+    .update({ expires_at: new Date(Date.now() - 1000).toISOString() })
+    .eq('id', matchingRecord.id)
 
   // Real Supabase Auth Flow
   const adminAuth = adminSupabase.auth.admin
@@ -581,221 +550,121 @@ export async function verifyEmailOtp(
   let userExists = false
   const { data: existingProfile } = await adminSupabase
     .from('profiles')
-    .select('id')
-    .eq('email', email)
-    .single()
+    .select('*')
+    .ilike('email', trimmedEmail)
+    .maybeSingle()
 
   if (existingProfile) {
     userExists = true
   }
 
+  let finalUserId: string | null = existingProfile?.id || null
+
   if (!userExists) {
     try {
       const { data: userList } = await adminAuth.listUsers()
-      const userData = (userList?.users as any[])?.find(u => u.email?.toLowerCase() === email.toLowerCase())
+      const userData = (userList?.users as any[])?.find(
+        (u) => u.email?.toLowerCase() === trimmedEmail
+      )
       if (userData) {
         userExists = true
+        finalUserId = userData.id
       }
-    } catch (e) {
-      // user does not exist
-    }
+    } catch (e) {}
   }
+
+  const nameToUse = fullName || matchingRecord.full_name || 'Customer'
 
   if (!userExists) {
-    const nameToUse = fullName || record.full_name || 'Customer'
     const { data: newUser, error: createError } = await adminAuth.createUser({
-      email,
+      email: trimmedEmail,
+      password: password || undefined,
       email_confirm: true,
       user_metadata: {
         full_name: nameToUse,
-        role: 'customer'
-      }
-    })
-
-    if (createError) {
-      if (createError.message.includes('already been registered') || createError.message.includes('already exists')) {
-        // User actually exists, safe to proceed
-      } else {
-        return { error: 'Failed to create user account: ' + createError.message }
-      }
-    } else {
-      try {
-        if (newUser?.user) {
-          await adminSupabase.from('profiles').insert({
-            id: newUser.user.id,
-            email,
-            full_name: nameToUse,
-            role: 'customer',
-            phone: phone || null
-          })
-        }
-      } catch (e) {
-        // Silently catch in case database trigger handles it
-      }
-    }
-  }
-
-  // Custom Cookie Auth Session
-  const { data: profile } = await adminSupabase
-    .from('profiles')
-    .select('*')
-    .eq('email', email)
-    .single()
-
-  let finalProfile = profile
-  if (!finalProfile) {
-    try {
-      const { data: userList } = await adminAuth.listUsers()
-      const userData = (userList?.users as any[])?.find(u => u.email?.toLowerCase() === email.toLowerCase())
-      if (userData) {
-        const nameToUse = fullName || record.full_name || 'Customer'
-        const { data: insertedProfile } = await adminSupabase.from('profiles').insert({
-          id: userData.id,
-          email,
-          full_name: nameToUse,
-          role: 'customer',
-          phone: phone || null
-        }).select('*').single()
-        finalProfile = insertedProfile
-      }
-    } catch (e) {
-      console.error('Error fetching user fallback:', e)
-    }
-  }
-
-  if (!finalProfile) {
-    return { error: 'Failed to establish user profile session.' }
-  }
-
-  await setRawflexSessionCookie({
-    id: finalProfile.id,
-    email: finalProfile.email,
-    full_name: finalProfile.full_name,
-    role: finalProfile.role
-  })
-
-  revalidatePath('/', 'layout')
-  if (redirectTo === 'NO_REDIRECT') {
-    return { success: true }
-  }
-  redirect(redirectTo && redirectTo.startsWith('/') ? redirectTo : '/')
-}
-
-export async function verifyPhoneOtp(
-  firebaseIdToken: string,
-  mode: 'LOGIN' | 'REGISTER',
-  redirectTo?: string,
-  fullName?: string
-): Promise<AuthResult> {
-  if (!firebaseIdToken) {
-    return { error: 'Phone verification token is required' }
-  }
-
-  let verifiedPhone = ''
-
-  try {
-    verifiedPhone = await getVerifiedFirebasePhoneNumber(firebaseIdToken)
-  } catch (error: any) {
-    console.error('Firebase phone token verification failed:', error)
-    return { error: 'Phone verification failed. Please request a new OTP.' }
-  }
-
-  if (!verifiedPhone) {
-    return { error: 'Firebase did not return a verified phone number.' }
-  }
-
-  const adminSupabase = createAdminClient()
-  const adminAuth = adminSupabase.auth.admin
-  const phoneValues = getPhoneSearchValues(verifiedPhone)
-  const localPhone = getLocalPhoneNumber(verifiedPhone)
-
-  const { data: profiles, error: profileError } = await adminSupabase
-    .from('profiles')
-    .select('id, email, full_name, role, phone')
-    .in('phone', phoneValues)
-    .limit(1)
-
-  if (profileError) {
-    console.error('Phone profile lookup failed:', getErrorDetails(profileError))
-    return { error: 'Unable to check this phone number. Please try again.' }
-  }
-
-  let finalProfile = profiles?.[0] || null
-
-  if (mode === 'LOGIN' && !finalProfile) {
-    return { error: 'User does not exist, first create an account' }
-  }
-
-  if (!finalProfile) {
-    const nameToUse = fullName?.trim() || 'Customer'
-    let profileEmail = getPhoneOnlyEmail(verifiedPhone)
-    const { data: newUser, error: createError } = await adminAuth.createUser({
-      email: profileEmail,
-      email_confirm: true,
-      phone: verifiedPhone,
-      phone_confirm: true,
-      user_metadata: {
-        full_name: nameToUse,
-        phone: localPhone,
+        phone: phone || '',
         role: 'customer',
-        login_provider: 'firebase_phone',
       },
     })
 
-    let userId = newUser?.user?.id
-
-    if (createError || !userId) {
-      let existingAuthUser = null
-
+    if (createError) {
+      if (
+        !createError.message.includes('already been registered') &&
+        !createError.message.includes('already exists')
+      ) {
+        return { error: 'Failed to create user account: ' + createError.message }
+      }
+    } else if (newUser?.user) {
+      finalUserId = newUser.user.id
       try {
-        existingAuthUser = await findSupabaseAuthUserByPhone(adminAuth, phoneValues)
-      } catch (lookupError: any) {
-        console.error('Phone auth user recovery failed:', getErrorDetails(lookupError))
-      }
+        await adminSupabase.from('profiles').upsert({
+          id: newUser.user.id,
+          email: trimmedEmail,
+          full_name: nameToUse,
+          role: 'customer',
+          phone: phone || null,
+        })
 
-      if (!existingAuthUser) {
-        console.error('Phone auth user creation failed:', createError)
-        return { error: createError?.message || 'Failed to create phone account.' }
-      }
-
-      userId = existingAuthUser.id
-      profileEmail = existingAuthUser.email || profileEmail
-    } else {
-      profileEmail = newUser.user?.email || profileEmail
+        sendWelcomeEmail({
+          toEmail: trimmedEmail,
+          fullName: nameToUse,
+        }).catch((err) => console.error('Error sending welcome email on OTP:', err))
+      } catch (e) {}
     }
+  } else if (password && finalUserId) {
+    try {
+      await adminAuth.updateUserById(finalUserId, { password })
+    } catch (err) {}
+  }
 
-    const { data: insertedProfile, error: insertError } = await adminSupabase
+  // Ensure profile exists in profiles table
+  let { data: profile } = await adminSupabase
+    .from('profiles')
+    .select('*')
+    .ilike('email', trimmedEmail)
+    .maybeSingle()
+
+  if (!profile && finalUserId) {
+    const { data: upsertedProfile } = await adminSupabase
       .from('profiles')
-      .insert({
-        id: userId,
-        email: profileEmail,
+      .upsert({
+        id: finalUserId,
+        email: trimmedEmail,
         full_name: nameToUse,
-        phone: localPhone,
         role: 'customer',
+        phone: phone || null,
       })
       .select('*')
       .single()
 
-    if (insertError || !insertedProfile) {
-      console.error('Phone profile creation failed:', getErrorDetails(insertError))
-      return { error: insertError?.message || 'Failed to create customer profile.' }
-    }
+    profile = upsertedProfile
+  }
 
-    finalProfile = insertedProfile
+  if (!profile) {
+    return { error: 'Failed to establish user profile session.' }
   }
 
   await setRawflexSessionCookie({
-    id: finalProfile.id,
-    email: finalProfile.email,
-    full_name: finalProfile.full_name,
-    role: finalProfile.role,
+    id: profile.id,
+    email: profile.email,
+    full_name: profile.full_name,
+    role: profile.role || 'customer',
   })
 
+  revalidatePath('/', 'layout')
   if (redirectTo === 'NO_REDIRECT') {
     return { success: true }
   }
-  revalidatePath('/', 'layout')
-  redirect(redirectTo && redirectTo.startsWith('/') ? redirectTo : '/')
+  redirect(redirectTo && redirectTo.startsWith('/') ? redirectTo : '/profile')
+}
+
+export async function verifyPhoneOtp(
+  _token?: string,
+  _mode?: 'LOGIN' | 'REGISTER',
+  _redirectTo?: string,
+  _fullName?: string
+): Promise<AuthResult> {
+  return { error: 'Phone OTP authentication is disabled. Please use email OTP or password login.' }
 }
 
 function getAdminEmails(): string[] {
@@ -998,18 +867,24 @@ export async function adminLogin(
 }
 
 export async function logout() {
-  const supabase = await createClient()
-  await supabase.auth.signOut()
+  try {
+    const supabase = await createClient()
+    await supabase.auth.signOut()
+  } catch (err) {
+    console.error('Error in logout signOut:', err)
+  }
   await clearRawflexSessionCookie()
-  revalidatePath('/', 'layout')
   redirect('/login')
 }
 
 export async function logoutForClient(): Promise<AuthResult> {
-  const supabase = await createClient()
-  await supabase.auth.signOut()
+  try {
+    const supabase = await createClient()
+    await supabase.auth.signOut()
+  } catch (err) {
+    console.error('Error in logoutForClient signOut:', err)
+  }
   await clearRawflexSessionCookie()
-  revalidatePath('/', 'layout')
   return { success: true }
 }
 

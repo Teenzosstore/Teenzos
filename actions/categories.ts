@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/adminAuth'
+import { syncCategoryProductCounts } from '@/actions/products'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
@@ -46,6 +47,7 @@ export async function createCategory(
     description: description || null,
     image_url: imageUrl || null,
     is_active: isActive,
+    count: '0 styles',
   })
 
   if (error) {
@@ -55,7 +57,11 @@ export async function createCategory(
     return { error: error.message }
   }
 
+  await syncCategoryProductCounts(supabase)
+
   revalidatePath('/admin/categories')
+  revalidatePath('/')
+  revalidatePath('/shop')
   redirect('/admin/categories')
 }
 
@@ -97,7 +103,11 @@ export async function updateCategory(
     return { error: error.message }
   }
 
+  await syncCategoryProductCounts(supabase)
+
   revalidatePath('/admin/categories')
+  revalidatePath('/')
+  revalidatePath('/shop')
   redirect('/admin/categories')
 }
 
@@ -113,6 +123,8 @@ export async function deleteCategory(id: string): Promise<ActionResult> {
   }
 
   revalidatePath('/admin/categories')
+  revalidatePath('/')
+  revalidatePath('/shop')
   return { success: true }
 }
 
@@ -134,5 +146,7 @@ export async function toggleCategoryStatus(
   }
 
   revalidatePath('/admin/categories')
+  revalidatePath('/')
+  revalidatePath('/shop')
   return { success: true }
 }

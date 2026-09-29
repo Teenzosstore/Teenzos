@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useTransition, useEffect } from 'react'
-import { Plus, Trash2, Edit2, Check, X, Loader2 } from 'lucide-react'
-import { updateProductVariant, deleteProductVariant, bulkCreateProductVariants } from '@/actions/products'
+import { Plus, Trash2, Edit2, Check, X, Loader2, Zap } from 'lucide-react'
+import { updateProductVariant, deleteProductVariant, bulkCreateProductVariants, bulkUpdateVariantsStock } from '@/actions/products'
 
 type Variant = {
   id: string
@@ -41,6 +41,39 @@ function variantBelongsToColor(variantName: string, colorName: string): boolean 
   )
 }
 
+export function extractSizeOnly(value: string): string {
+  if (!value) return ''
+  const trimmed = value.trim()
+  if (trimmed.includes(' - ')) {
+    const parts = trimmed.split(' - ')
+    return parts[parts.length - 1].trim()
+  }
+  if (trimmed.includes(' / ')) {
+    const parts = trimmed.split(' / ')
+    return parts[parts.length - 1].trim()
+  }
+  if (trimmed.includes('(')) {
+    return trimmed.replace(/\(.*?\)/g, '').trim()
+  }
+  return trimmed
+}
+
+export function extractColorFromVariant(value: string): string | null {
+  if (!value) return null
+  const trimmed = value.trim()
+  if (trimmed.includes(' - ')) {
+    const parts = trimmed.split(' - ')
+    return parts.slice(0, -1).join(' - ').trim()
+  }
+  if (trimmed.includes(' / ')) {
+    const parts = trimmed.split(' / ')
+    return parts.slice(0, -1).join(' / ').trim()
+  }
+  const match = trimmed.match(/\((.*?)\)/)
+  if (match) return match[1].trim()
+  return null
+}
+
 export function ProductVariantsEditor({
   productId,
   variants,
@@ -54,6 +87,38 @@ export function ProductVariantsEditor({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [isAdding, setIsAdding] = useState(false)
   const [activeTab, setActiveTab] = useState<string>('All')
+  const [variantsList, setVariantsList] = useState<Variant[]>(variants)
+  const [shortcutStock, setShortcutStock] = useState('10')
+  const [isUpdatingStock, setIsUpdatingStock] = useState(false)
+  const [stockSuccessMsg, setStockSuccessMsg] = useState('')
+
+  // Sync state if server prop updates
+  useEffect(() => {
+    setVariantsList(variants)
+  }, [variants])
+
+  // Real-time listener for color stock changes dispatched from ProductForm
+  useEffect(() => {
+    const handleColorStockUpdated = (e: Event) => {
+      const detail = (e as CustomEvent<{ colorName: string; stock: number }>).detail
+      if (!detail || typeof detail.stock !== 'number') return
+      const { colorName: targetColor, stock } = detail
+
+      setVariantsList((prev) =>
+        prev.map((v) => {
+          const belongs = variantBelongsToColor(v.variant_name, targetColor)
+          const isGeneric = !extractColorFromVariant(v.variant_name)
+          if (belongs || (isGeneric && (!targetColor || targetColor.toLowerCase() === 'all'))) {
+            return { ...v, stock_quantity: stock }
+          }
+          return v
+        })
+      )
+    }
+
+    window.addEventListener('teenzos-color-stock-updated', handleColorStockUpdated)
+    return () => window.removeEventListener('teenzos-color-stock-updated', handleColorStockUpdated)
+  }, [])
 
   // Derive colors
   const productColors = (() => {
@@ -81,7 +146,7 @@ export function ProductVariantsEditor({
   }, [isAdding, colorName])
 
   // Filter variants for display based on active color tab
-  const displayedVariants = variants.filter(v => {
+  const displayedVariants = variantsList.filter(v => {
     if (activeTab === 'All') return true
     
     return variantBelongsToColor(v.variant_name, activeTab)
@@ -99,14 +164,84 @@ export function ProductVariantsEditor({
   // Bulk Add Form State
   const [bulkData, setBulkData] = useState<BulkVariantForm[]>([])
 
+  const handleApplyShortcutStock = async (stockStr: string) => {
+    const val = Math.max(0, parseInt(stockStr || '0', 10) || 0)
+    setShortcutStock(val.toString())
+
+    // 1. If currently in bulk add mode:
+    if (isAdding) {
+      setBulkData((prev) =>
+        prev.map((row) => ({
+          ...row,
+          stock_quantity: val.toString(),
+        }))
+      )
+      setStockSuccessMsg(`Applied ${val} stock to all size options in the form!`)
+      setTimeout(() => setStockSuccessMsg(''), 3000)
+      return
+    }
+
+    // 2. If no variants exist yet and not in adding mode:
+    if (variantsList.length === 0 && !isAdding) {
+      const defaultPrefix = activeTab !== 'All' && activeTab !== 'General' ? `${activeTab} - ` : ''
+      setBulkData(STANDARD_SIZES.map(size => ({
+        id: crypto.randomUUID(),
+        variant_name: defaultPrefix ? `${defaultPrefix}${size}` : size,
+        price: '',
+        original_price: '',
+        stock_quantity: val.toString(),
+        is_active: true
+      })))
+      setIsAdding(true)
+      setEditingId(null)
+      setStockSuccessMsg(`Started with standard sizes set to ${val} stock!`)
+      setTimeout(() => setStockSuccessMsg(''), 3500)
+      return
+    }
+
+    // 3. If variants exist in database:
+    if (variantsList.length > 0) {
+      setIsUpdatingStock(true)
+      setVariantsList((prev) =>
+        prev.map((v) => {
+          if (activeTab === 'All' || variantBelongsToColor(v.variant_name, activeTab)) {
+            return { ...v, stock_quantity: val }
+          }
+          return v
+        })
+      )
+
+      try {
+        const result = await bulkUpdateVariantsStock(
+          productId,
+          val,
+          activeTab === 'All' ? null : activeTab
+        )
+        if (result.error) {
+          alert(`Error updating stock: ${result.error}`)
+        } else {
+          setStockSuccessMsg(
+            `All ${activeTab === 'All' ? 'sizes' : `${activeTab} sizes`} updated to ${val} stock in database!`
+          )
+          setTimeout(() => setStockSuccessMsg(''), 3000)
+        }
+      } catch (err: any) {
+        alert(`Failed to update stock: ${err.message}`)
+      } finally {
+        setIsUpdatingStock(false)
+      }
+    }
+  }
+
   const initializeBulkForm = () => {
-    // Start bulk form with just standard sizes (acting as the General Template)
+    // Start bulk form with standard sizes using shortcut stock (default 10)
+    const stockToUse = shortcutStock || '10'
     setBulkData(STANDARD_SIZES.map(size => ({
       id: crypto.randomUUID(),
       variant_name: size,
       price: '',
       original_price: '',
-      stock_quantity: '0',
+      stock_quantity: stockToUse,
       is_active: true
     })))
     setIsAdding(true)
@@ -163,7 +298,7 @@ export function ProductVariantsEditor({
       variant_name: defaultPrefix,
       price: '',
       original_price: '',
-      stock_quantity: '0',
+      stock_quantity: shortcutStock || '10',
       is_active: true
     }])
   }
@@ -191,7 +326,7 @@ export function ProductVariantsEditor({
 
   const handleEdit = (variant: Variant) => {
     setFormData({
-      variant_name: variant.variant_name,
+      variant_name: extractSizeOnly(variant.variant_name),
       price: variant.price.toString(),
       original_price: variant.original_price ? variant.original_price.toString() : '',
       stock_quantity: variant.stock_quantity.toString(),
@@ -204,6 +339,7 @@ export function ProductVariantsEditor({
   const handleDelete = (id: string) => {
     if (confirm('Are you sure you want to delete this size option?')) {
       startTransition(async () => {
+        setVariantsList((prev) => prev.filter((v) => v.id !== id))
         const result = await deleteProductVariant(id, productId)
 
         if (result.error) {
@@ -218,7 +354,19 @@ export function ProductVariantsEditor({
     startTransition(async () => {
       const fd = new FormData()
       fd.append('product_id', productId)
-      fd.append('variant_name', formData.variant_name)
+
+      let finalName = formData.variant_name.trim()
+      if (editingId) {
+        const original = variantsList.find((v) => v.id === editingId)
+        const col = original ? extractColorFromVariant(original.variant_name) : null
+        if (col && !finalName.toLowerCase().includes(col.toLowerCase())) {
+          finalName = `${col} - ${finalName}`
+        }
+      } else if (activeTab !== 'All' && activeTab !== 'General') {
+        finalName = `${activeTab} - ${finalName}`
+      }
+
+      fd.append('variant_name', finalName)
       fd.append('price', formData.price)
       if (formData.original_price) fd.append('original_price', formData.original_price)
       fd.append('stock_quantity', formData.stock_quantity)
@@ -232,6 +380,22 @@ export function ProductVariantsEditor({
           alert(result.error)
           return
         }
+
+        // Optimistically update variantsList in UI
+        setVariantsList((prev) =>
+          prev.map((v) =>
+            v.id === editingId
+              ? {
+                  ...v,
+                  variant_name: finalName,
+                  price: parseFloat(formData.price),
+                  original_price: formData.original_price ? parseFloat(formData.original_price) : null,
+                  stock_quantity: parseInt(formData.stock_quantity || '0', 10),
+                  is_active: formData.is_active,
+                }
+              : v
+          )
+        )
       }
       resetForm()
     })
@@ -283,12 +447,93 @@ export function ProductVariantsEditor({
           <button
             type="button"
             onClick={initializeBulkForm}
-            disabled={isPending}
+            disabled={isPending || isUpdatingStock}
             className="admin-primary-action px-4 py-2 text-sm rounded-md"
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Size Options
           </button>
+        )}
+      </div>
+
+      {/* ─── QUICK STOCK SHORTCUT BAR (AT STARTING) ────────────────── */}
+      <div className="p-3 sm:p-3.5 rounded-xl bg-gradient-to-r from-[#FAF9F8] via-white to-pink-50/20 border border-stone-200/90 shadow-2xs space-y-2">
+        <div className="flex flex-col flex-wrap justify-between gap-4">
+          <div className="flex items-center gap-2 w-full">
+            <div className="w-7 h-7 rounded-lg bg-[#FF007A]/10 text-[#FF007A] flex items-center justify-center shrink-0">
+              <Zap className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-stone-900">
+                  Stock Shortcut (Bulk Set)
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 shrink-0">
+                  Instant
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick presets + input + Apply button */}
+          <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap justify-between">
+            <div className="flex items-center gap-1 bg-white border border-stone-200 rounded-lg px-2 py-1 shadow-2xs">
+              <span className="text-[10.5px] font-bold text-stone-500 uppercase tracking-wider">
+                Stock:
+              </span>
+              <input
+                type="number"
+                min="0"
+                value={shortcutStock}
+                onChange={(e) => setShortcutStock(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleApplyShortcutStock(shortcutStock)
+                  }
+                }}
+                className="w-12 text-xs font-black text-center text-stone-900 bg-transparent focus:outline-none"
+                placeholder="10"
+              />
+            </div>
+
+            {/* Presets */}
+            <div className="flex items-center gap-1">
+              {['5', '10', '20', '50'].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => handleApplyShortcutStock(preset)}
+                  disabled={isPending || isUpdatingStock}
+                  className="text-[11px] font-bold px-2 py-1 rounded-md bg-stone-100 hover:bg-stone-200 text-stone-700 transition-colors cursor-pointer"
+                  title={`Apply ${preset} stock to all sizes`}
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleApplyShortcutStock(shortcutStock)}
+              disabled={isPending || isUpdatingStock}
+              className="px-3 py-1.5 bg-[#0B0D0E] hover:bg-black text-white text-xs font-bold rounded-lg transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+            >
+              {isUpdatingStock ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+              )}
+              <span>Apply to All</span>
+            </button>
+          </div>
+        </div>
+
+        {stockSuccessMsg && (
+          <div className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-md flex items-center gap-1.5">
+            <Check className="w-3.5 h-3.5 text-emerald-600" />
+            <span>{stockSuccessMsg}</span>
+          </div>
         )}
       </div>
 
@@ -305,7 +550,7 @@ export function ProductVariantsEditor({
                   : 'text-ink/60 hover:bg-panel2'
               }`}
             >
-              All Sizes ({variants.length})
+              All Sizes ({variantsList.length})
             </button>
           )}
 
@@ -326,7 +571,7 @@ export function ProductVariantsEditor({
           {productColors.map((color) => {
             const count = isAdding
               ? bulkData.filter(v => variantBelongsToColor(v.variant_name, color)).length
-              : variants.filter(v => variantBelongsToColor(v.variant_name, color)).length
+              : variantsList.filter(v => variantBelongsToColor(v.variant_name, color)).length
             return (
               <button
                 key={color}
@@ -348,81 +593,103 @@ export function ProductVariantsEditor({
 
       {/* SINGLE EDIT FORM */}
       {editingId && (
-        <form onSubmit={handleSingleSubmit} className="bg-cream-deep p-5 rounded-xl border border-cream-line shadow-sm">
-          <h4 className="text-sm font-bold text-ink/80 mb-4 pb-2 border-b border-cream-line">Edit Size Option</h4>
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-5">
-            <div className="md:col-span-2">
-              <label className="block text-xs font-semibold text-ink/60 uppercase tracking-wider mb-1">Size Name</label>
-              <input
-                required
-                type="text"
-                maxLength={100}
-                value={formData.variant_name}
-                onChange={(e) => setFormData({ ...formData, variant_name: e.target.value })}
-                className="block w-full rounded-md border-cream-line shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
-                placeholder="e.g. M, L, XL"
-              />
+        <form onSubmit={handleSingleSubmit} className="bg-cream-deep p-4 sm:p-5 rounded-xl border border-cream-line shadow-sm space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-cream-line">
+            <h4 className="text-sm font-bold text-ink">Edit Size Option</h4>
+            <button
+              type="button"
+              onClick={resetForm}
+              className="text-xs text-ink/60 hover:text-ink font-semibold"
+            >
+              Cancel
+            </button>
+          </div>
+          <div className="space-y-4">
+            {/* Responsive Grid: 2 cols on mobile, 4 cols on desktop */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="min-w-0">
+                <label className="block text-[11px] font-bold text-ink/70 uppercase tracking-wider mb-1 truncate">
+                  Size Name
+                </label>
+                <input
+                  required
+                  type="text"
+                  maxLength={100}
+                  value={formData.variant_name}
+                  onChange={(e) => setFormData({ ...formData, variant_name: e.target.value })}
+                  className="block w-full rounded-md border-cream-line shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs sm:text-sm px-2.5 py-1.5 sm:py-2 border bg-panel font-bold text-ink"
+                  placeholder="e.g. M, L, XL"
+                />
+              </div>
+              <div className="min-w-0">
+                <label className="block text-[11px] font-bold text-ink/70 uppercase tracking-wider mb-1 truncate">
+                  Price (₹)
+                </label>
+                <input
+                  required
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.price}
+                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                  className="block w-full rounded-md border-cream-line shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs sm:text-sm px-2.5 py-1.5 sm:py-2 border bg-panel"
+                />
+              </div>
+              <div className="min-w-0">
+                <label className="block text-[11px] font-bold text-ink/70 uppercase tracking-wider mb-1 truncate">
+                  Old Price (₹)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.original_price}
+                  onChange={(e) => setFormData({ ...formData, original_price: e.target.value })}
+                  className="block w-full rounded-md border-cream-line shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs sm:text-sm px-2.5 py-1.5 sm:py-2 border bg-panel"
+                  placeholder="Optional"
+                />
+              </div>
+              <div className="min-w-0">
+                <label className="block text-[11px] font-bold text-ink/70 uppercase tracking-wider mb-1 truncate">
+                  Stock
+                </label>
+                <input
+                  required
+                  type="number"
+                  min="0"
+                  value={formData.stock_quantity}
+                  onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}
+                  className="block w-full rounded-md border-cream-line shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs sm:text-sm px-2.5 py-1.5 sm:py-2 border bg-panel font-bold text-ink"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-ink/60 uppercase tracking-wider mb-1">Price (₹)</label>
-              <input
-                required
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.price}
-                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                className="block w-full rounded-md border-cream-line shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-ink/60 uppercase tracking-wider mb-1">Old Price (₹)</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.original_price}
-                onChange={(e) => setFormData({ ...formData, original_price: e.target.value })}
-                className="block w-full rounded-md border-cream-line shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
-                placeholder="Optional"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-ink/60 uppercase tracking-wider mb-1">Stock</label>
-              <input
-                required
-                type="number"
-                min="0"
-                value={formData.stock_quantity}
-                onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}
-                className="block w-full rounded-md border-cream-line shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
-              />
-            </div>
-            <div className="md:col-span-5 flex items-center justify-between mt-2">
-              <label className="flex items-center cursor-pointer">
+
+            {/* Bottom Actions Row */}
+            <div className="flex items-center justify-between pt-2 border-t border-cream-line">
+              <label className="flex items-center cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={formData.is_active}
                   onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="rounded border-cream-line text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                  className="rounded border-cream-line text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
                 />
-                <span className="ml-2 text-sm font-medium text-ink/80">Active</span>
+                <span className="ml-2 text-xs sm:text-sm font-medium text-ink/80">Active</span>
               </label>
-              <div className="flex gap-3">
+              <div className="flex gap-2 sm:gap-3">
                 <button
                   type="button"
                   onClick={resetForm}
                   disabled={isPending}
-                  className="px-4 py-2 text-sm font-medium text-ink/80 bg-panel border border-cream-line rounded-md shadow-sm hover:bg-panel2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-ink/80 bg-panel border border-cream-line rounded-md shadow-sm hover:bg-panel2 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="admin-primary-action px-5 py-2 text-sm rounded-md"
+                  className="admin-primary-action px-3.5 sm:px-5 py-1.5 sm:py-2 text-xs sm:text-sm rounded-md cursor-pointer inline-flex items-center"
                 >
-                  {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  {isPending && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
                   Save Changes
                 </button>
               </div>
@@ -489,10 +756,14 @@ export function ProductVariantsEditor({
                   <label className="block text-xs font-medium text-ink/60 md:hidden mb-1">Size Name</label>
                   <input
                     type="text"
-                    value={row.variant_name}
-                    onChange={(e) => updateBulkRow(row.id, 'variant_name', e.target.value)}
-                    className="block w-full rounded-md border-cream-line shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border font-medium text-ink"
-                    placeholder="e.g. XL"
+                    value={extractSizeOnly(row.variant_name)}
+                    onChange={(e) => {
+                      const colorPrefix = extractColorFromVariant(row.variant_name)
+                      const val = e.target.value.trim()
+                      updateBulkRow(row.id, 'variant_name', colorPrefix ? `${colorPrefix} - ${val}` : val)
+                    }}
+                    className="block w-full rounded-md border-cream-line shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border font-bold text-ink"
+                    placeholder="e.g. M, L, XL"
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -575,9 +846,79 @@ export function ProductVariantsEditor({
         </form>
       )}
 
-      {variants.length > 0 ? (
+      {variantsList.length > 0 ? (
         <div className="space-y-4">
-          <div className="overflow-hidden bg-panel shadow ring-1 ring-black ring-opacity-5 sm:rounded-xl">
+          {/* Mobile Cards View (sm:hidden) */}
+          <div className="sm:hidden space-y-2.5">
+            {displayedVariants.map((variant) => (
+              <div
+                key={variant.id}
+                className={`p-3.5 rounded-xl border bg-panel transition-all ${
+                  editingId === variant.id
+                    ? 'border-indigo-500 bg-indigo-50/50 ring-1 ring-indigo-500'
+                    : 'border-cream-line shadow-2xs'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center justify-center min-w-[32px] h-7 px-2.5 rounded-[5px] bg-[#0B0D0E] text-white font-extrabold text-xs tracking-wider shadow-2xs">
+                      {extractSizeOnly(variant.variant_name)}
+                    </span>
+                    {extractColorFromVariant(variant.variant_name) && (
+                      <span className="text-[11px] font-semibold text-stone-500 bg-stone-100 px-2 py-0.5 rounded border border-stone-200">
+                        {extractColorFromVariant(variant.variant_name)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleEdit(variant)}
+                      disabled={isPending}
+                      className="text-indigo-600 bg-indigo-50 p-1.5 rounded-lg hover:bg-indigo-100 transition-colors cursor-pointer"
+                      title="Edit Size"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(variant.id)}
+                      disabled={isPending}
+                      className="text-red-600 bg-red-50 p-1.5 rounded-lg hover:bg-red-100 transition-colors cursor-pointer"
+                      title="Delete Size"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-cream-line/70 text-xs">
+                  <div>
+                    <span className="text-[10px] text-ink/50 uppercase tracking-wider block font-bold">Price</span>
+                    <span className="font-bold text-ink">₹{variant.price}</span>
+                    {variant.original_price && (
+                      <span className="text-[10px] text-ink/40 line-through ml-1">₹{variant.original_price}</span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-ink/50 uppercase tracking-wider block font-bold">Stock</span>
+                    <span className="font-extrabold text-ink">{variant.stock_quantity}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-ink/50 uppercase tracking-wider block font-bold">Status</span>
+                    {variant.is_active ? (
+                      <span className="text-[11px] font-bold text-emerald-600">Active</span>
+                    ) : (
+                      <span className="text-[11px] font-bold text-stone-400">Inactive</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Table View (hidden sm:block) */}
+          <div className="hidden sm:block overflow-x-auto bg-panel shadow-2xs ring-1 ring-stone-200/90 rounded-xl">
             <table className="min-w-full divide-y divide-cream-line">
               <thead className="bg-cream-deep">
                 <tr>
@@ -591,8 +932,17 @@ export function ProductVariantsEditor({
               <tbody className="divide-y divide-cream-line bg-panel">
                 {displayedVariants.map((variant) => (
                   <tr key={variant.id} className={editingId === variant.id ? 'bg-indigo-50' : 'hover:bg-panel2 transition-colors'}>
-                    <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-bold text-ink">
-                      {variant.variant_name}
+                    <td className="whitespace-nowrap py-3.5 pl-4 pr-3 text-sm font-bold text-ink">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center justify-center min-w-[32px] h-7 px-2.5 rounded-[5px] bg-[#0B0D0E] text-white font-extrabold text-xs tracking-wider shadow-2xs">
+                          {extractSizeOnly(variant.variant_name)}
+                        </span>
+                        {extractColorFromVariant(variant.variant_name) && (
+                          <span className="text-[11px] font-semibold text-stone-500 bg-stone-100 px-2 py-0.5 rounded border border-stone-200">
+                            {extractColorFromVariant(variant.variant_name)}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="whitespace-nowrap px-3 py-4 text-sm text-ink/60">
                       <div className="flex flex-col">
@@ -602,7 +952,7 @@ export function ProductVariantsEditor({
                         )}
                       </div>
                     </td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm font-medium text-ink">
+                    <td className="whitespace-nowrap px-3 py-4 text-sm font-bold text-ink">
                       {variant.stock_quantity}
                     </td>
                     <td className="whitespace-nowrap px-3 py-4 text-sm text-ink/60">
@@ -619,17 +969,19 @@ export function ProductVariantsEditor({
                     <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                       <div className="flex items-center justify-end gap-3">
                         <button
+                          type="button"
                           onClick={() => handleEdit(variant)}
                           disabled={isPending}
-                          className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 p-1.5 rounded hover:bg-indigo-100 transition-colors"
+                          className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 p-1.5 rounded hover:bg-indigo-100 transition-colors cursor-pointer"
                           title="Edit Size"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleDelete(variant.id)}
                           disabled={isPending}
-                          className="text-red-600 hover:text-red-900 bg-red-50 p-1.5 rounded hover:bg-red-100 transition-colors"
+                          className="text-red-600 hover:text-red-900 bg-red-50 p-1.5 rounded hover:bg-red-100 transition-colors cursor-pointer"
                           title="Delete Size"
                         >
                           <Trash2 className="w-4 h-4" />

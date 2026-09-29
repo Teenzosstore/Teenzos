@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import {
   CheckSquare,
   ShieldCheck,
@@ -10,8 +11,10 @@ import {
   MessageSquare,
   RotateCcw,
   Heart,
+  Maximize2,
 } from "lucide-react";
 import ProductReviews from "./ProductReviews";
+import SizeChartPopup from "./SizeChartPopup";
 
 type ProductTabsSectionProps = {
   productId: string;
@@ -20,7 +23,12 @@ type ProductTabsSectionProps = {
   features?: string[];
   specifications?: { label: string; value: string }[];
   reviews?: any[];
+  sizeChart?: {
+    imageUrl: string;
+    title: string;
+  } | null;
   onOpenSizeChart?: () => void;
+  currentUser?: { id: string; name?: string } | null;
 };
 
 export default function ProductTabsSection({
@@ -30,32 +38,59 @@ export default function ProductTabsSection({
   features,
   specifications,
   reviews = [],
+  sizeChart,
   onOpenSizeChart,
+  currentUser,
 }: ProductTabsSectionProps) {
   const [activeTab, setActiveTab] = useState<
     "description" | "specifications" | "size" | "shipping" | "reviews"
   >("description");
+  const [showSizeChartPopup, setShowSizeChartPopup] = useState(false);
+  const [liveReviewCount, setLiveReviewCount] = useState<number>(reviews.length);
+
+  const hasSizeChart = Boolean(sizeChart?.imageUrl && sizeChart.imageUrl.trim() !== "");
+
+  React.useEffect(() => {
+    if (!hasSizeChart && activeTab === "size") {
+      setActiveTab("description");
+    }
+  }, [hasSizeChart, activeTab]);
+
+  React.useEffect(() => {
+    setLiveReviewCount(reviews.length);
+  }, [reviews.length]);
+
+  React.useEffect(() => {
+    const handleOpenReviews = () => {
+      setActiveTab("reviews");
+      const el = document.getElementById("product-tabs");
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth" });
+      }
+    };
+    const handleNewReview = () => {
+      setLiveReviewCount((prev) => prev + 1);
+    };
+
+    window.addEventListener("teenzos-open-reviews-tab", handleOpenReviews);
+    window.addEventListener("teenzos-review-added", handleNewReview);
+
+    return () => {
+      window.removeEventListener("teenzos-open-reviews-tab", handleOpenReviews);
+      window.removeEventListener("teenzos-review-added", handleNewReview);
+    };
+  }, []);
 
   const defaultDescription =
     description ||
     `Make a statement with the TeenZos ${productName}. Designed for those who express more than just style, this piece combines premium comfort with bold street aesthetics. Featuring our signature graffiti artwork, it's the perfect blend of creativity, attitude, and everyday wear.`;
 
-  const defaultFeatures = features || [
-    "Premium cotton blend fabric",
-    "Soft, breathable & comfortable",
-    "Oversized streetwear fit",
-    "Ribbed cuffs and hem",
-    "High-quality graffiti print"
-  ];
+  const productHighlights =
+    features && Array.isArray(features) ? features.filter(Boolean) : [];
 
   const defaultSpecs = specifications || [
     { label: "Fabric Details", value: "380 GSM Heavyweight Cotton Fleece" },
     { label: "Fit Profile", value: "Relaxed Streetwear Oversized Silhouette" },
-    {
-      label: "Hood & Neck",
-      value: "Double-Layered Hood with Reinforced Eyelets",
-    },
-    { label: "Graphic Technique", value: "High-Density Screen Graffiti Print" },
     { label: "Stitching Details", value: "Double-Needle Reinforced Seams" },
     {
       label: "Care Instructions",
@@ -64,56 +99,63 @@ export default function ProductTabsSection({
     { label: "Country of Origin", value: "Crafted with Pride in India" },
   ];
 
-  const reviewCount = reviews.length > 0 ? reviews.length : 128;
-
   return (
     <>
-
       {/* 1. Trust Badges Row (4 items) - Placed before ProductTabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 py-4 sm:py-5 border-y border-gray-200/70 mt-8 md:mt-10">
-        <div className="flex items-center gap-2 sm:gap-2.5 p-2">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-gray-200 bg-white flex items-center justify-center shrink-0 shadow-2xs">
-            <Truck className="w-4 h-4 sm:w-5 sm:h-5 text-gray-700" />
+      <div className="max-w-7xl mx-auto">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 py-3 sm:py-5 items-center border-y border-gray-200/70 mt-8 md:mt-10 px-4">
+          <div className="flex items-center justify-start sm:justify-center gap-2 sm:gap-2.5 py-1 px-1 sm:p-2 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-gray-200 bg-white flex items-center justify-center shrink-0 shadow-2xs">
+              <Truck className="w-4 h-4 sm:w-5 sm:h-5 text-gray-700" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] sm:text-xs font-bold text-gray-900 leading-tight truncate">
+                Free Shipping
+              </p>
+              <p className="text-[10px] text-gray-500 truncate">On all orders</p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-[11px] sm:text-xs font-bold text-gray-900 leading-tight truncate">Free Shipping</p>
-            <p className="text-[10px] text-gray-500 truncate">On all orders</p>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-2 sm:gap-2.5 p-2">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-gray-200 bg-white flex items-center justify-center shrink-0 shadow-2xs">
-            <ShieldCheck className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-gray-700" />
+          <div className="flex items-center justify-start sm:justify-center gap-2 sm:gap-2.5 py-1 px-1 sm:p-2 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-gray-200 bg-white flex items-center justify-center shrink-0 shadow-2xs">
+              <ShieldCheck className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-gray-700" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] sm:text-xs font-bold text-gray-900 leading-tight truncate">
+                Premium Quality
+              </p>
+              <p className="text-[10px] text-gray-500 truncate">Built to last</p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-[11px] sm:text-xs font-bold text-gray-900 leading-tight truncate">Premium Quality</p>
-            <p className="text-[10px] text-gray-500 truncate">Built to last</p>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-2 sm:gap-2.5 p-2">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-gray-200 bg-white flex items-center justify-center shrink-0 shadow-2xs">
-            <RotateCcw className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-gray-700" />
+          <div className="flex items-center justify-start sm:justify-center gap-2 sm:gap-2.5 py-1 px-1 sm:p-2 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-gray-200 bg-white flex items-center justify-center shrink-0 shadow-2xs">
+              <RotateCcw className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-gray-700" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] sm:text-xs font-bold text-gray-900 leading-tight truncate">
+                Easy Returns
+              </p>
+              <p className="text-[10px] text-gray-500 truncate">7-day policy</p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-[11px] sm:text-xs font-bold text-gray-900 leading-tight truncate">Easy Returns</p>
-            <p className="text-[10px] text-gray-500 truncate">7-day policy</p>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-2 sm:gap-2.5 p-2">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-gray-200 bg-white flex items-center justify-center shrink-0 shadow-2xs">
-            <Heart className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-gray-700" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[11px] sm:text-xs font-bold text-gray-900 leading-tight truncate">10K+ Customers</p>
-            <p className="text-[10px] text-gray-500 truncate">Love TeenZos</p>
+          <div className="flex items-center justify-start sm:justify-center gap-2 sm:gap-2.5 py-1 px-1 sm:p-2 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-gray-200 bg-white flex items-center justify-center shrink-0 shadow-2xs">
+              <Heart className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-gray-700" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] sm:text-xs font-bold text-gray-900 leading-tight truncate">
+                10K+ Customers
+              </p>
+              <p className="text-[10px] text-gray-500 truncate">Love TeenZos</p>
+            </div>
           </div>
         </div>
       </div>
 
       {/* 2. tabs section */}
-      <div className="w-full bg-white rounded-[5px] border border-gray-200/80 shadow-sm p-4 sm:p-6 lg:p-6 mt-6 md:mt-8">
+      <div id="product-tabs" className="w-full bg-white rounded-[5px] border border-gray-200/80 shadow-sm p-4 sm:p-6 lg:p-6 mt-6 md:mt-8">
         {/* Tab Navigation Headers */}
         <div className="flex items-center gap-4 sm:gap-8 border-b border-gray-200 overflow-x-auto scrollbar-hide pb-0">
           <button
@@ -146,20 +188,22 @@ export default function ProductTabsSection({
             )}
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab("size")}
-            className={`pb-3 text-sm sm:text-base font-bold whitespace-nowrap transition-colors relative ${
-              activeTab === "size"
-                ? "text-[#FF007A]"
-                : "text-gray-500 hover:text-gray-900"
-            }`}
-          >
-            Size & Fit
-            {activeTab === "size" && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FF007A] rounded-full" />
-            )}
-          </button>
+          {hasSizeChart && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("size")}
+              className={`pb-3 text-sm sm:text-base font-bold whitespace-nowrap transition-colors relative ${
+                activeTab === "size"
+                  ? "text-[#FF007A]"
+                  : "text-gray-500 hover:text-gray-900"
+              }`}
+            >
+              Size & Fit
+              {activeTab === "size" && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FF007A] rounded-full" />
+              )}
+            </button>
+          )}
 
           <button
             type="button"
@@ -185,50 +229,54 @@ export default function ProductTabsSection({
                 : "text-gray-500 hover:text-gray-900"
             }`}
           >
-            Reviews ({reviewCount})
+            Reviews ({liveReviewCount})
             {activeTab === "reviews" && (
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FF007A] rounded-full" />
             )}
           </button>
         </div>
 
-        {/* Tab 1: Description & 6 Checkboxes (Exact Mockup Match) */}
+        {/* Tab 1: Description & Key Highlights (Only rendered if added to this product) */}
         {activeTab === "description" && (
-          <div className="pt-6 sm:pt-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Left: Paragraph Text */}
-            <div className="lg:col-span-6 space-y-4">
-              <p className="text-gray-600 text-sm sm:text-base leading-relaxed">
+          <div
+            className={`pt-6 sm:pt-8 grid grid-cols-1 ${
+              productHighlights.length > 0 ? "lg:grid-cols-12" : "max-w-4xl"
+            } gap-8 items-start`}
+          >
+            {/* Paragraph Text */}
+            <div
+              className={`${
+                productHighlights.length > 0 ? "lg:col-span-6" : "w-full"
+              } space-y-4`}
+            >
+              <p className="text-gray-600 text-sm sm:text-base leading-relaxed whitespace-pre-line">
                 {defaultDescription}
-              </p>
-              <p className="text-gray-500 text-xs sm:text-sm leading-relaxed">
-                Engineered with durable drop-shoulder proportions, twin-needle
-                reinforced seams, and our signature cyberpunk graffiti bunny
-                insignia across the back and chest. Built for high rotation in
-                your daily rotation.
               </p>
             </div>
 
-            {/* Right: Feature Checklist (with Pink Checkmarks) */}
-            <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-gray-50/60 p-5 rounded-2xl border border-gray-100">
-              {defaultFeatures.map((feature, idx) => (
-                <div key={idx} className="flex items-center gap-2.5">
-                  <div className="w-5 h-5 rounded-[5px] bg-[#FFF0F6] border border-[#FF007A] flex items-center justify-center shrink-0">
-                    <svg
-                      className="w-3.5 h-3.5 text-[#FF007A]"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="3"
-                    >
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
+            {/* Right: Feature Checklist (with Pink Checkmarks) - Only shown if highlights exist */}
+            {productHighlights.length > 0 && (
+              <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-gray-50/60 p-5 rounded-2xl border border-gray-100">
+                {productHighlights.map((feature, idx) => (
+                  <div key={idx} className="flex items-center gap-2.5">
+                    <div className="w-5 h-5 rounded-[5px] bg-[#FFF0F6] border border-[#FF007A] flex items-center justify-center shrink-0">
+                      <svg
+                        className="w-3.5 h-3.5 text-[#FF007A]"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </div>
+                    <span className="text-xs sm:text-sm font-semibold text-gray-800">
+                      {feature}
+                    </span>
                   </div>
-                  <span className="text-xs sm:text-sm font-semibold text-gray-800">
-                    {feature}
-                  </span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -254,77 +302,90 @@ export default function ProductTabsSection({
         )}
 
         {/* Tab 3: Size & Fit */}
-        {activeTab === "size" && (
+        {hasSizeChart && activeTab === "size" && (
           <div className="pt-6 sm:pt-8 space-y-6">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm border border-gray-200 rounded-xl overflow-hidden">
-                <thead className="bg-gray-100/80 text-gray-800 font-bold uppercase text-xs">
-                  <tr>
-                    <th className="p-3.5">Size</th>
-                    <th className="p-3.5">Chest (Inches)</th>
-                    <th className="p-3.5">Length (Inches)</th>
-                    <th className="p-3.5">Shoulder (Inches)</th>
-                    <th className="p-3.5">Sleeve (Inches)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 text-gray-700">
-                  <tr className="hover:bg-gray-50/70">
-                    <td className="p-3.5 font-bold text-gray-900">S</td>
-                    <td className="p-3.5">42</td>
-                    <td className="p-3.5">27.5</td>
-                    <td className="p-3.5">20.5</td>
-                    <td className="p-3.5">23.5</td>
-                  </tr>
-                  <tr className="hover:bg-gray-50/70">
-                    <td className="p-3.5 font-bold text-gray-900">M</td>
-                    <td className="p-3.5">44</td>
-                    <td className="p-3.5">28.5</td>
-                    <td className="p-3.5">21.5</td>
-                    <td className="p-3.5">24.0</td>
-                  </tr>
-                  <tr className="bg-[#FFF0F6]/40 hover:bg-[#FFF0F6]/60">
-                    <td className="p-3.5 font-black text-[#FF007A]">
-                      L (Featured)
-                    </td>
-                    <td className="p-3.5 font-semibold text-gray-900">46</td>
-                    <td className="p-3.5 font-semibold text-gray-900">29.5</td>
-                    <td className="p-3.5 font-semibold text-gray-900">22.5</td>
-                    <td className="p-3.5 font-semibold text-gray-900">24.5</td>
-                  </tr>
-                  <tr className="hover:bg-gray-50/70">
-                    <td className="p-3.5 font-bold text-gray-900">XL</td>
-                    <td className="p-3.5">48</td>
-                    <td className="p-3.5">30.5</td>
-                    <td className="p-3.5">23.5</td>
-                    <td className="p-3.5">25.0</td>
-                  </tr>
-                  <tr className="hover:bg-gray-50/70">
-                    <td className="p-3.5 font-bold text-gray-900">XXL</td>
-                    <td className="p-3.5">50</td>
-                    <td className="p-3.5">31.5</td>
-                    <td className="p-3.5">24.5</td>
-                    <td className="p-3.5">25.5</td>
-                  </tr>
-                </tbody>
-              </table>
+            {/* Header info */}
+            <div className="text-center max-w-xl mx-auto mb-2">
+              <h3 className="text-base sm:text-xl font-bold text-gray-900 uppercase tracking-tight">
+                {sizeChart?.title || "Size & Fit Guide"}
+              </h3>
+              <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                Click on the size chart image to open full interactive preview
+                with zoom and pan.
+              </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-gray-50 border border-gray-200">
-              <p className="text-xs sm:text-sm text-gray-600">
-                💡 <strong>Fit Tip:</strong> Our hoodie is tailored for an
-                oversized streetwear boxy drape. If you prefer a standard
-                regular fit, order one size down.
-              </p>
-              {onOpenSizeChart && (
-                <button
-                  type="button"
-                  onClick={onOpenSizeChart}
-                  className="shrink-0 px-4 py-2 rounded-lg bg-[#FF007A] text-white text-xs font-bold hover:bg-[#E0006C] transition-colors"
+            {/* Responsive Container: 1 Col on Mobile, 2 Cols on Desktop */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 items-center max-w-4xl mx-auto">
+              {/* Col 1: Size Chart Image Card */}
+              <div className="flex flex-col items-center justify-center w-full">
+                <div
+                  onClick={() => setShowSizeChartPopup(true)}
+                  className="group relative w-full max-w-[360px] sm:max-w-[420px] aspect-[4/3] bg-white rounded-[6px] border border-gray-200/90 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden cursor-pointer flex items-center justify-center p-2 sm:p-3"
+                  title="Click to preview & zoom size chart"
                 >
-                  View Full Size Guide
-                </button>
-              )}
+                  <Image
+                    src={
+                      sizeChart?.imageUrl ||
+                      "https://ik.imagekit.io/n6nsqvnx44/rawflex/size-charts/size-chart_6224wy2o3.png"
+                    }
+                    alt={sizeChart?.title || "Size Chart"}
+                    fill
+                    sizes="(max-width: 768px) 100vw, 500px"
+                    className="object-contain p-2 sm:p-4 group-hover:scale-[1.02] transition-transform duration-300 !rounded-sm"
+                  />
+
+                  {/* Hover / Tap Preview Overlay Badge */}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-colors duration-200 flex items-center justify-center">
+                    <div className="opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-200 bg-black/80 backdrop-blur-md text-white text-xs sm:text-sm font-bold px-4 py-2 rounded-full shadow-lg flex items-center gap-2 pointer-events-none">
+                      <Maximize2 className="w-4 h-4 text-[#FF007A]" />
+                      <span>Click to Preview & Zoom</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Col 2: Quick Measurement Advice Cards */}
+              <div className="flex flex-col gap-3 w-full max-w-[360px] sm:max-w-[420px] mx-auto md:mx-0">
+                <div className="p-3.5 sm:p-4 rounded-xl border border-gray-100 bg-gray-50/70 text-left">
+                  <p className="text-xs sm:text-sm font-bold text-gray-900">
+                    Chest Measurement
+                  </p>
+                  <p className="text-[11px] sm:text-xs text-gray-500 mt-1 leading-snug">
+                    Measure around the fullest part of your chest, keeping tape
+                    horizontal.
+                  </p>
+                </div>
+                <div className="p-3.5 sm:p-4 rounded-xl border border-gray-100 bg-gray-50/70 text-left">
+                  <p className="text-xs sm:text-sm font-bold text-gray-900">
+                    Length Measurement
+                  </p>
+                  <p className="text-[11px] sm:text-xs text-gray-500 mt-1 leading-snug">
+                    Measure from highest shoulder point straight down to the
+                    bottom hem.
+                  </p>
+                </div>
+                <div className="p-3.5 sm:p-4 rounded-xl border border-gray-100 bg-gray-50/70 text-left">
+                  <p className="text-xs sm:text-sm font-bold text-gray-900">
+                    Streetwear Fit Tip
+                  </p>
+                  <p className="text-[11px] sm:text-xs text-gray-500 mt-1 leading-snug">
+                    All TeenZos garments feature a relaxed drop-shoulder
+                    oversized fit.
+                  </p>
+                </div>
+              </div>
             </div>
+
+            {/* Size Chart Popup */}
+            {sizeChart?.imageUrl && (
+              <SizeChartPopup
+                isOpen={showSizeChartPopup}
+                onClose={() => setShowSizeChartPopup(false)}
+                imageUrl={sizeChart.imageUrl}
+                title={sizeChart.title || "TeenZos Size Chart"}
+              />
+            )}
           </div>
         )}
 
@@ -377,7 +438,7 @@ export default function ProductTabsSection({
         {/* Tab 5: Reviews */}
         {activeTab === "reviews" && (
           <div className="pt-6 sm:pt-8">
-            <ProductReviews productId={productId} initialReviews={reviews} />
+            <ProductReviews productId={productId} initialReviews={reviews} currentUser={currentUser} />
           </div>
         )}
       </div>

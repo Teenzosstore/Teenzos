@@ -308,7 +308,7 @@ export default function Contact({ faqs = [] }: { faqs?: FAQ[] }) {
               <div className="w-14 h-14 bg-[#27B43E] text-white rounded-full flex items-center justify-center mx-auto shadow-md">
                 <CheckCircle2 className="w-8 h-8" />
               </div>
-              <h4 className="font-display font-bold text-xl text-[#0B0D0E]">
+              <h4 className="font-display font-[350] text-xl text-[#0B0D0E]">
                 Message Delivered!
               </h4>
               <p className="text-stone-600 text-xs sm:text-sm max-w-sm mx-auto leading-relaxed">

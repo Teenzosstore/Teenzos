@@ -41,7 +41,7 @@ export default function FloatingActionButtons() {
   return (
     <aside
       aria-label="Quick Actions"
-      className="fixed bottom-5 right-4 sm:bottom-6 sm:right-6 z-[9999] flex flex-col items-center gap-2.5 sm:gap-3 select-none pointer-events-none"
+      className="fixed bottom-20 lg:bottom-6 right-4 sm:right-6 z-[9980] flex flex-col items-center gap-2.5 sm:gap-3 select-none pointer-events-none"
     >
       {/* ── Scroll To Top Button (Hidden until scrolled down) ── */}
       <button

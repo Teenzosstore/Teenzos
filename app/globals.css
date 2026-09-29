@@ -1044,3 +1044,159 @@ body {
 .animate-drawer-slide-left {
   animation: drawerSlideLeft 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* ============================================================
+   MODERN ADD-TO-CART TRANSITION & ANIMATION SYSTEM
+   ============================================================ */
+
+@keyframes cartImpact {
+  0% {
+    transform: scale(1);
+  }
+  20% {
+    transform: scale(1.35) rotate(-12deg);
+  }
+  45% {
+    transform: scale(0.85) rotate(8deg);
+  }
+  70% {
+    transform: scale(1.18) rotate(-4deg);
+  }
+  85% {
+    transform: scale(0.96) rotate(1deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.animate-cart-impact {
+  animation: cartImpact 0.65s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards !important;
+}
+
+@keyframes cartRipple {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+.animate-cart-ripple {
+  animation: cartRipple 0.65s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+}
+
+@keyframes badgePop {
+  0% {
+    transform: scale(0.6);
+  }
+  40% {
+    transform: scale(1.6);
+    filter: drop-shadow(0 0 10px rgba(247, 37, 133, 0.95));
+  }
+  70% {
+    transform: scale(0.88);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-badge-pop {
+  animation: badgePop 0.55s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards !important;
+}
+
+@keyframes islandSlideDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-28px) scale(0.92);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(4px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-island-enter {
+  animation: islandSlideDown 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes flyCapsuleGlow {
+  0%, 100% {
+    box-shadow: 0 0 18px rgba(247, 37, 133, 0.75), 0 0 30px rgba(54, 184, 197, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(247, 37, 133, 0.95), 0 0 45px rgba(54, 184, 197, 0.7);
+  }
+}
+
+.animate-fly-glow {
+  animation: flyCapsuleGlow 0.45s ease-in-out infinite alternate;
+}
+
+/* ============================================================
+   TEENZOS PAGE TRANSITION LOADER ANIMATIONS
+   ============================================================ */
+
+@keyframes spinOrbit {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-orbit {
+  animation: spinOrbit 3s linear infinite;
+}
+
+@keyframes spinReverse {
+  0% {
+    transform: rotate(360deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+.animate-spin-reverse {
+  animation: spinReverse 4.5s linear infinite;
+}
+
+@keyframes pulseBrand {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 24px rgba(247, 37, 133, 0.35), 0 10px 30px rgba(0, 0, 0, 0.25);
+  }
+  50% {
+    transform: scale(1.04);
+    box-shadow: 0 0 36px rgba(247, 37, 133, 0.55), 0 12px 36px rgba(54, 184, 197, 0.35);
+  }
+}
+
+.animate-pulse-brand {
+  animation: pulseBrand 2.2s ease-in-out infinite;
+}
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.22s ease-out forwards;
+}
+
+

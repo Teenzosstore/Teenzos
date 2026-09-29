@@ -55,6 +55,7 @@ export interface Product {
   name: string
   slug: string
   price: number
+  oldPrice?: number | null
   short_description: string | null
   description: string | null
   featured_image_url: string | null
@@ -69,8 +70,6 @@ export interface Product {
   seo_title: string | null
   seo_description: string | null
   seo_keywords: string | null
-  fabric: string | null
-  stitching: string | null
   use_global_size_chart: boolean
   size_chart_image_url: string | null
   size_chart_cloudinary_public_id: string | null

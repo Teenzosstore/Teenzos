@@ -3,31 +3,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/adminAuth'
-import { v2 as cloudinary } from 'cloudinary'
+import { uploadToImageKit, deleteFromImageKit, isImageKitConfigured } from '@/lib/imagekit'
 import { revalidatePath } from 'next/cache'
 
 export type ActionResult = {
   error?: string
   success?: boolean
   data?: any
-}
-
-function configureCloudinary() {
-  if (
-    !process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ||
-    !process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY ||
-    !process.env.CLOUDINARY_API_SECRET
-  ) {
-    return false
-  }
-
-  cloudinary.config({
-    cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  })
-
-  return true
 }
 
 export async function getGlobalSizeChart(): Promise<ActionResult> {
@@ -100,12 +82,12 @@ export async function createOrUpdateGlobalSizeChart(
 
   if (existing) {
     // Update existing global size chart
-    // Delete old image from Cloudinary if it exists
-    if (existing.cloudinary_public_id && configureCloudinary()) {
+    // Delete old image from ImageKit if it exists
+    if (existing.cloudinary_public_id && isImageKitConfigured()) {
       try {
-        await cloudinary.uploader.destroy(existing.cloudinary_public_id, { resource_type: 'image' })
+        await deleteFromImageKit(existing.cloudinary_public_id)
       } catch (e) {
-        console.error('Failed to delete old size chart from Cloudinary:', e)
+        console.error('Failed to delete old size chart from ImageKit:', e)
       }
     }
 
@@ -140,6 +122,7 @@ export async function createOrUpdateGlobalSizeChart(
   }
 
   revalidatePath('/admin/size-chart')
+  revalidatePath('/shop', 'layout')
   return { success: true }
 }
 
@@ -159,12 +142,12 @@ export async function deleteSizeChart(id: string): Promise<ActionResult> {
     return { error: 'Cannot delete the global size chart' }
   }
 
-  // Delete from Cloudinary if exists
-  if (chart?.cloudinary_public_id && configureCloudinary()) {
+  // Delete from ImageKit if exists
+  if (chart?.cloudinary_public_id && isImageKitConfigured()) {
     try {
-      await cloudinary.uploader.destroy(chart.cloudinary_public_id, { resource_type: 'image' })
+      await deleteFromImageKit(chart.cloudinary_public_id)
     } catch (e) {
-      console.error('Failed to delete size chart from Cloudinary:', e)
+      console.error('Failed to delete size chart from ImageKit:', e)
     }
   }
 
@@ -193,30 +176,25 @@ export async function uploadSizeChartImage(
     return { error: 'No file provided' }
   }
 
-  if (!configureCloudinary()) {
-    return { error: 'Cloudinary is not configured' }
+  if (!isImageKitConfigured()) {
+    return { error: 'ImageKit is not configured' }
   }
 
   try {
-    // Convert file to base64
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
-    const base64 = buffer.toString('base64')
-    const dataUri = `data:${file.type};base64,${base64}`
 
-    // Upload to Cloudinary
-    const result = await cloudinary.uploader.upload(dataUri, {
-      folder: 'rawflex/size-charts',
-      resource_type: 'image',
-      use_filename: true,
-      unique_filename: true,
+    const result = await uploadToImageKit({
+      file: buffer,
+      fileName: file.name || `size-chart-${Date.now()}`,
+      folder: '/rawflex/size-charts',
     })
 
     return {
       success: true,
       data: {
-        image_url: result.secure_url,
-        cloudinary_public_id: result.public_id,
+        image_url: result.url,
+        cloudinary_public_id: result.fileId,
       },
     }
   } catch (error: any) {
@@ -240,6 +218,14 @@ export async function getProductSizeChart(productId: string): Promise<ActionResu
     return { error: productError.message }
   }
 
+  // If size chart is explicitly disabled for this product
+  if (
+    product.use_global_size_chart === false &&
+    (!product.size_chart_image_url || product.size_chart_image_url === 'disabled')
+  ) {
+    return { error: 'Size chart is disabled for this product' }
+  }
+
   // If using global size chart, fetch it
   if (product.use_global_size_chart) {
     const { data: globalChart, error: globalError } = await supabase
@@ -260,7 +246,7 @@ export async function getProductSizeChart(productId: string): Promise<ActionResu
   }
 
   // Otherwise return product-specific size chart
-  if (product.size_chart_image_url) {
+  if (product.size_chart_image_url && product.size_chart_image_url !== 'disabled') {
     return {
       success: true,
       data: {
@@ -280,57 +266,81 @@ export async function getProductSizeChart(productId: string): Promise<ActionResu
 }
 
 // Public version that doesn't require admin authentication
-export async function getProductSizeChartPublic(productId: string): Promise<ActionResult> {
-  const supabase = await createClient()
+export async function getProductSizeChartPublic(productId?: string): Promise<ActionResult> {
+  try {
+    const supabase = createAdminClient()
 
-  // First get the product's size chart settings
-  const { data: product, error: productError } = await supabase
-    .from('products')
-    .select('use_global_size_chart, size_chart_image_url, size_chart_cloudinary_public_id')
-    .eq('id', productId)
-    .single()
+    // 1. If productId or slug provided, check product-specific size chart settings
+    if (productId) {
+      let query = supabase
+        .from('products')
+        .select('id, use_global_size_chart, size_chart_image_url, size_chart_cloudinary_public_id')
+      
+      // If productId looks like UUID or regular string, check both id and slug
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productId)
+      if (isUUID) {
+        query = query.eq('id', productId)
+      } else {
+        query = query.or(`id.eq.${productId},slug.eq.${productId}`)
+      }
 
-  if (productError) {
-    return { error: productError.message }
-  }
+      const { data: product } = await query.maybeSingle()
 
-  // If using global size chart, fetch it
-  if (product.use_global_size_chart) {
-    const { data: globalChart, error: globalError } = await supabase
+      if (product) {
+        // If disabled: use_global_size_chart is false and (no image or image === 'disabled')
+        if (product.use_global_size_chart === false) {
+          if (product.size_chart_image_url && product.size_chart_image_url !== 'disabled') {
+            return {
+              success: true,
+              data: {
+                id: product.id,
+                name: 'Product Specific Size Chart',
+                image_url: product.size_chart_image_url,
+                cloudinary_public_id: product.size_chart_cloudinary_public_id,
+                is_global: false,
+                is_active: true,
+                created_at: '',
+                updated_at: '',
+              }
+            }
+          }
+          // Size chart is explicitly disabled for this product!
+          return { error: 'Size chart is disabled for this product' }
+        }
+      }
+    }
+
+    // 2. Otherwise fetch the active global size chart configured in admin
+    const { data: globalChart } = await supabase
       .from('size_charts')
       .select('*')
       .eq('is_global', true)
       .eq('is_active', true)
-      .single()
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
-    if (globalError) {
-      if (globalError.code === 'PGRST116') {
-        return { error: 'No global size chart configured' }
-      }
-      return { error: globalError.message }
+    if (globalChart && globalChart.image_url) {
+      return { success: true, data: { ...globalChart, is_global: true } }
     }
 
-    return { success: true, data: { ...globalChart, is_global: true } }
-  }
+    // 3. Fallback to any active size chart
+    const { data: anyChart } = await supabase
+      .from('size_charts')
+      .select('*')
+      .eq('is_active', true)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
-  // Otherwise return product-specific size chart
-  if (product.size_chart_image_url) {
-    return {
-      success: true,
-      data: {
-        id: productId,
-        name: 'Product Specific Size Chart',
-        image_url: product.size_chart_image_url,
-        cloudinary_public_id: product.size_chart_cloudinary_public_id,
-        is_global: false,
-        is_active: true,
-        created_at: '',
-        updated_at: '',
-      }
+    if (anyChart && anyChart.image_url) {
+      return { success: true, data: anyChart }
     }
-  }
 
-  return { error: 'No size chart available for this product' }
+    return { error: 'No size chart available' }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to fetch size chart' }
+  }
 }
 
 export async function updateProductSizeChartSettings(

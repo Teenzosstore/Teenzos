@@ -10,17 +10,22 @@ export const metadata: Metadata = {
 
 export default async function EditProductPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams?: Promise<{ created?: string }>
 }) {
   const { id } = await params
+  const sParams = searchParams ? await searchParams : {}
+  const isJustCreated = sParams?.created === 'true' || sParams?.created === '1'
+
   const admin = await requireAdmin()
   if (admin.ok === false) {
     redirect('/admin/login')
   }
   const supabase = admin.adminClient
 
-  const [productRes, categoriesRes, otherProductsRes, infoRes, faqRes, variantsRes, imagesRes] = await Promise.all([
+  const [productRes, categoriesRes, otherProductsRes, infoRes, variantsRes, imagesRes] = await Promise.all([
     supabase.from('products').select('*').eq('id', id).single(),
     supabase
       .from('categories')
@@ -33,11 +38,6 @@ export default async function EditProductPage({
       .order('name'),
     supabase
       .from('product_information')
-      .select('*')
-      .eq('product_id', id)
-      .order('display_order'),
-    supabase
-      .from('product_faqs')
       .select('*')
       .eq('product_id', id)
       .order('display_order'),
@@ -59,22 +59,15 @@ export default async function EditProductPage({
 
   return (
     <AdminShell>
-      <div className="max-w-6xl space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-ink">Edit Product</h1>
-          <p className="text-ink/60 text-sm mt-0.5">
-            Update &quot;{productRes.data.name}&quot;
-          </p>
-        </div>
-
+      <div className="w-full space-y-5">
         <ProductEditSections
           product={productRes.data}
           categories={categoriesRes.data || []}
           otherProducts={otherProductsRes.data || []}
           information={infoRes.data || []}
-          faqs={faqRes.data || []}
           variants={variantsRes.data || []}
           images={imagesRes.data || []}
+          initialJustCreated={isJustCreated}
         />
       </div>
     </AdminShell>

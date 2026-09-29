@@ -2,146 +2,47 @@ import Header from '@/components/Header'
 import Footer from '@/components/Footer'
 import ProductViewSection from './_components/ProductViewSection'
 import YouMayAlsoLikeSection from './_components/YouMayAlsoLikeSection'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getSampleImages } from '@/lib/samples'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getProductSizeChartPublic } from '@/actions/size-charts'
 import { selectDisplayVariant } from '@/lib/productVariants'
-import { getProductByIdOrSlug, SHOP_PRODUCTS } from '@/lib/shopProducts'
+import { slugify } from '@/lib/shopProducts'
 
-const SAMPLE_CATEGORIES: Record<string, { name: string; description: string; price: number; originalPrice?: number }> = {
-  'new-drops': {
-    name: 'New Drop Tee',
-    description: 'Fresh from the studio. Limited run, heavyweight cotton, bold graphics. Each piece tells a story.',
-    price: 1299,
-    originalPrice: 1599,
-  },
-  'best-sellers': {
-    name: 'Bestseller Tee',
-    description: "The one everyone's talking about. Proven fit, premium fabric, restocked by demand.",
-    price: 1199,
-    originalPrice: 1399,
-  },
-  'streetwear-collection': {
-    name: 'Streetwear Essential',
-    description: 'Core collection piece. Oversized fit, heavyweight fabric, built for the streets.',
-    price: 1499,
-    originalPrice: 1799,
-  },
-  'acid-wash': {
-    name: 'Acid Wash Tee',
-    description: 'One-of-one acid wash. No two pieces are identical. Distressed finish, premium cotton.',
-    price: 1599,
-    originalPrice: 1899,
-  },
-  'gym-collection': {
-    name: 'Gym Performance Tee',
-    description: 'Moisture-wicking, anti-odor, built for the grind. Technical fabric meets street style.',
-    price: 999,
-    originalPrice: 1299,
-  },
-  'limited-edition': {
-    name: 'Limited Edition Drop',
-    description: "Numbered release. Once it's gone, it's gone forever. Collector's grade quality.",
-    price: 2499,
-    originalPrice: 2999,
-  },
-}
-
-function isSampleId(id: string): boolean {
-  return id.startsWith('sample-')
-}
-
-function parseSampleId(id: string): { categoryId: string; index: number } | null {
-  const match = id.match(/^sample-(.+)-\d+$/)
-  if (!match) return null
-  const parts = id.split('-')
-  const index = parseInt(parts[parts.length - 1], 10)
-  const categoryId = parts.slice(1, -1).join('-')
-  return { categoryId, index }
-}
-
-function getSampleProductData(id: string) {
-  const parsed = parseSampleId(id)
-  if (!parsed) return null
-
-  const { categoryId, index } = parsed
-  const images = getSampleImages(categoryId)
-  const categoryInfo = SAMPLE_CATEGORIES[categoryId]
-
-  if (!categoryInfo || index >= images.length) return null
-
-  return {
-    id,
-    name: `${categoryInfo.name} ${index + 1}`,
-    slug: id,
-    category_id: categoryId,
-    is_active: true,
-    badge: index === 0 ? 'NEW ARRIVAL' : undefined,
-    rating: 4.8,
-    review_count: 128,
-    sold_count: '500+ sold',
-    short_description: categoryInfo.description,
-    description: `${categoryInfo.description} Heavyweight fabric, premium construction, and TeenZos signature street styling.`,
-    fabric: '380 GSM Heavyweight Cotton',
-    stitching: 'Double-needle stitching for durability',
-    featured_image_url: images[index],
-    color_group_id: null,
-    color_name: 'Black',
-    color_hex: '#0B0D0E',
-    product_images: images.slice(0, 5).map((img, i) => ({
-      image_url: img,
-      color_name: i === 0 ? 'Black' : `Variant ${i + 1}`,
-    })),
-    product_variants: [
-      { id: `${id}-s`, variant_name: 'S', price: categoryInfo.price, original_price: categoryInfo.originalPrice, stock_quantity: 10 },
-      { id: `${id}-m`, variant_name: 'M', price: categoryInfo.price, original_price: categoryInfo.originalPrice, stock_quantity: 15 },
-      { id: `${id}-l`, variant_name: 'L', price: categoryInfo.price, original_price: categoryInfo.originalPrice, stock_quantity: 20 },
-      { id: `${id}-xl`, variant_name: 'XL', price: categoryInfo.price, original_price: categoryInfo.originalPrice, stock_quantity: 8 },
-      { id: `${id}-xxl`, variant_name: 'XXL', price: categoryInfo.price, original_price: categoryInfo.originalPrice, stock_quantity: 5 },
-    ],
-    features: [
-      'Premium cotton blend fabric',
-      'Soft, breathable & comfortable',
-      'Oversized streetwear fit',
-      'Ribbed cuffs and hem',
-      'High-quality graffiti print'
-    ],
-  }
-}
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient()
   const { id } = await params
+  const decodedId = decodeURIComponent(id).trim()
 
   let { data: product } = await supabase
     .from('products')
     .select('name, seo_title, seo_description, seo_keywords, featured_image_url')
-    .eq('id', id)
+    .eq('id', decodedId)
     .single()
 
   if (!product) {
     const { data: slugProduct } = await supabase
       .from('products')
       .select('name, seo_title, seo_description, seo_keywords, featured_image_url')
-      .eq('slug', id)
+      .eq('slug', decodedId)
       .single()
     product = slugProduct
   }
 
   if (!product) {
-    const local = getProductByIdOrSlug(id)
-    if (local) {
-      return {
-        title: `${local.name} | TEENZOS Streetwear`,
-        description: local.description || `Shop ${local.name} online at TEENZOS.`,
-        openGraph: {
-          title: `${local.name} | TEENZOS`,
-          description: local.description,
-          images: [{ url: local.image_url }],
-        },
-      }
-    }
+    const adminSupabase = createAdminClient()
+    const { data: slugIlikeProduct } = await adminSupabase
+      .from('products')
+      .select('name, seo_title, seo_description, seo_keywords, featured_image_url')
+      .ilike('slug', decodedId)
+      .single()
+    product = slugIlikeProduct
+  }
+
+  if (!product) {
     return {}
   }
 
@@ -166,7 +67,8 @@ function renderProductPage(
   categoryName: string,
   similarProducts: any[],
   reviews: any[],
-  sizeChart: { imageUrl: string; title: string } | null
+  sizeChart: { imageUrl: string; title: string } | null,
+  currentUser?: { id: string; name?: string } | null
 ) {
   // Compile image array
   let images: { image_url: string; color_name?: string | null }[] = []
@@ -181,15 +83,10 @@ function renderProductPage(
     images = [{ image_url: productData.featured_image_url }]
   }
 
-  // Compile information
-  let information = productData.product_information || []
-  if (productData.fabric) {
-    information.push({ label: 'Fabric Details', value: productData.fabric, display_order: -2 })
-  }
-  if (productData.stitching) {
-    information.push({ label: 'Stitching Details', value: productData.stitching, display_order: -1 })
-  }
-  information.sort((a: any, b: any) => a.display_order - b.display_order)
+  // Compile specifications (excluding Key Features)
+  const information = (productData.product_information || [])
+    .filter((item: any) => item.label !== 'Key Feature' && item.label !== 'Feature')
+    .sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0))
 
   const variants = productData.product_variants || []
 
@@ -217,6 +114,51 @@ function renderProductPage(
   }
 
   const colors = parseProductColors(productData.colors || productData.color_name)
+
+  const realReviewCount = reviews.length > 0 ? reviews.length : (Number(productData.review_count) || 0)
+  const realAverageRating = reviews.length > 0
+    ? Number((reviews.reduce((sum: number, r: any) => sum + Number(r.rating || 5), 0) / reviews.length).toFixed(1))
+    : (realReviewCount > 0 ? (Number(productData.rating) || 0) : 0)
+
+  // Parse dynamic features / checklist bullets from product_information table or raw data
+  let bio = productData.short_description || null
+  let parsedFeatures: string[] = []
+
+  // Check product_information table first (clean dedicated relation)
+  if (Array.isArray(productData.product_information)) {
+    const fromInfo = productData.product_information
+      .filter((item: any) => item.label === 'Key Feature' || item.label === 'Feature')
+      .sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0))
+      .map((item: any) => item.value)
+      .filter(Boolean)
+
+    if (fromInfo.length > 0) {
+      parsedFeatures = fromInfo
+    }
+  }
+
+  // Fallback legacy parser for existing JSON strings
+  if (parsedFeatures.length === 0) {
+    if (productData.features && Array.isArray(productData.features) && productData.features.length > 0) {
+      parsedFeatures = productData.features
+    } else if (productData.short_description) {
+      try {
+        if (productData.short_description.startsWith('{')) {
+          const parsed = JSON.parse(productData.short_description)
+          bio = parsed.bio || null
+          if (Array.isArray(parsed.features)) {
+            parsedFeatures = parsed.features
+          }
+        } else if (productData.short_description.startsWith('[')) {
+          const jsonFeatures = JSON.parse(productData.short_description)
+          bio = null
+          if (Array.isArray(jsonFeatures)) {
+            parsedFeatures = jsonFeatures
+          }
+        }
+      } catch {}
+    }
+  }
 
   return (
     <>
@@ -261,12 +203,12 @@ function renderProductPage(
               id: productData.id,
               name: productData.name,
               badge: productData.badge || 'NEW ARRIVAL',
-              rating: productData.rating || 4.8,
-              review_count: productData.review_count || 128,
-              sold_count: productData.sold_count || '500+ sold',
-              short_description: productData.short_description,
+              rating: realReviewCount > 0 ? realAverageRating : 0,
+              review_count: realReviewCount,
+              sold_count: productData.sold_count || undefined,
+              short_description: bio,
               description: productData.description,
-              features: productData.features,
+              features: parsedFeatures,
               specifications: productData.specifications,
               colors: colors,
             }}
@@ -277,12 +219,15 @@ function renderProductPage(
             categoryId={productData.category_id}
             sizeChart={sizeChart}
             reviews={reviews}
+            currentUser={currentUser}
           />
 
-          {/* You May Also Like Section (6 products matching mockup) */}
+          {/* You May Also Like Section (matching home page card design & category) */}
           <YouMayAlsoLikeSection
             products={similarProducts}
             currentProductId={productData.id}
+            categoryId={productData.category_id}
+            categoryName={categoryName}
           />
         </div>
       </main>
@@ -295,138 +240,116 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const supabase = await createClient()
   const { id } = await params
 
-  // 1. Handle sample products
-  if (isSampleId(id)) {
-    const sampleProduct = getSampleProductData(id)
-    if (!sampleProduct) notFound()
-    return renderProductPage(sampleProduct, sampleProduct.category_id, [], [], null)
+  // Fetch active size chart from admin (product-specific or global)
+  const initialSizeChartResult = await getProductSizeChartPublic(id)
+  let sizeChart = null
+  if (initialSizeChartResult.success && initialSizeChartResult.data) {
+    sizeChart = {
+      imageUrl: initialSizeChartResult.data.image_url,
+      title: initialSizeChartResult.data.name || 'Size Chart',
+    }
   }
+
+  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const currentUser = authUser
+    ? {
+        id: authUser.id,
+        name:
+          (authUser.user_metadata?.full_name as string) ||
+          (authUser.user_metadata?.name as string) ||
+          authUser.email?.split('@')[0] ||
+          'Customer',
+      }
+    : null
+
 
   // 2. Fetch from Supabase
-  let productData = null
-  let productError = null
+  let productData: any = null
+  const decodedId = decodeURIComponent(id).trim()
+  const adminSupabase = createAdminClient()
 
-  const { data: dataWithSizeChart, error: errWithSizeChart } = await supabase
+  const PRODUCT_DETAIL_SELECT = `
+    id, name, slug, category_id, is_active, badge, rating, review_count, short_description, description, featured_image_url, color_group_id, color_name, color_hex,
+    use_global_size_chart, size_chart_image_url, size_chart_cloudinary_public_id,
+    product_images ( image_url, color_name ),
+    product_variants ( id, variant_name, price, original_price, stock_quantity, is_active ),
+    product_information ( label, value, display_order )
+  `
+
+  // Try 1: by id using public client
+  const { data: byIdData } = await supabase
     .from('products')
-    .select(`
-      id, name, slug, category_id, is_active, badge, rating, short_description, description, fabric, stitching, featured_image_url, color_group_id, color_name, color_hex,
-      use_global_size_chart, size_chart_image_url, size_chart_cloudinary_public_id,
-      product_images ( image_url, color_name ),
-      product_variants ( id, variant_name, price, original_price, stock_quantity, is_active ),
-      product_information ( label, value, display_order ),
-      product_faqs ( question, answer, display_order )
-    `)
-    .eq('id', id)
+    .select(PRODUCT_DETAIL_SELECT)
+    .eq('id', decodedId)
     .single()
 
-  if (!errWithSizeChart && dataWithSizeChart) {
-    productData = dataWithSizeChart
+  if (byIdData) {
+    productData = byIdData
   } else {
-    // Try by slug
-    const { data: slugData } = await supabase
+    // Try 2: by slug using public client
+    const { data: bySlugData } = await supabase
       .from('products')
-      .select(`
-        id, name, slug, category_id, is_active, badge, rating, short_description, description, fabric, stitching, featured_image_url, color_group_id, color_name, color_hex,
-        use_global_size_chart, size_chart_image_url, size_chart_cloudinary_public_id,
-        product_images ( image_url, color_name ),
-        product_variants ( id, variant_name, price, original_price, stock_quantity, is_active ),
-        product_information ( label, value, display_order ),
-        product_faqs ( question, answer, display_order )
-      `)
-      .eq('slug', id)
+      .select(PRODUCT_DETAIL_SELECT)
+      .eq('slug', decodedId)
       .single()
 
-    if (slugData) {
-      productData = slugData
+    if (bySlugData) {
+      productData = bySlugData
     } else {
-      productError = errWithSizeChart
+      // Try 3: case-insensitive slug using admin client (bypasses RLS or casing issues)
+      const { data: bySlugIlike } = await adminSupabase
+        .from('products')
+        .select(PRODUCT_DETAIL_SELECT)
+        .ilike('slug', decodedId)
+        .single()
+
+      if (bySlugIlike) {
+        productData = bySlugIlike
+      } else {
+        // Try 4: by id using admin client
+        const { data: byIdAdmin } = await adminSupabase
+          .from('products')
+          .select(PRODUCT_DETAIL_SELECT)
+          .eq('id', decodedId)
+          .single()
+
+        if (byIdAdmin) {
+          productData = byIdAdmin
+        }
+      }
     }
   }
 
-  // 3. Fallback to Local Catalog Products (e.g. Bunny Graffiti Hoodie)
-  if (!productData || !productData.is_active) {
-    const localProduct = getProductByIdOrSlug(id)
-    if (localProduct) {
-      const formattedVariants = localProduct.sizes.map((s) => ({
-        id: `${localProduct.id}-${s.toLowerCase()}`,
-        variant_name: s,
-        price: localProduct.price,
-        original_price: localProduct.oldPrice,
-        stock_quantity: 25,
-        is_active: true,
-      }))
-
-      const galleryImages = localProduct.gallery_images || [
-        localProduct.image_url,
-        '/images/products/street-bunny-hoodie.jpg',
-        '/images/products/urban-bunny-hoodie.jpg',
-        '/images/products/signature-sweatshirt.jpg',
-        localProduct.image_url,
-      ]
-
-      const productImages = galleryImages.map((img, i) => ({
-        image_url: img,
-        color_name: localProduct.colors?.[i]?.name || (i === 0 ? 'Black' : null),
-      }))
-
-      const formattedData = {
-        id: localProduct.id,
-        name: localProduct.name,
-        slug: localProduct.slug,
-        category_id: localProduct.category_id,
-        is_active: true,
-        badge: localProduct.badge || 'NEW ARRIVAL',
-        rating: localProduct.rating || 4.8,
-        review_count: localProduct.review_count || 128,
-        sold_count: localProduct.sold_count || '500+ sold',
-        short_description: localProduct.description,
-        description: localProduct.description,
-        fabric: localProduct.fabric || '380 GSM Heavyweight Cotton Fleece',
-        stitching: localProduct.stitching || 'Double-needle reinforced stitching',
-        featured_image_url: localProduct.image_url,
-        colors: localProduct.colors,
-        product_images: productImages,
-        product_variants: formattedVariants,
-        features: localProduct.features || [
-          'Premium cotton blend fabric',
-          'Soft, breathable & comfortable',
-          'Oversized streetwear fit',
-          'Ribbed cuffs and hem',
-          'High-quality graffiti print'
-        ],
-        specifications: localProduct.specifications || [
-          { label: 'Fabric Details', value: localProduct.fabric || '380 GSM Heavyweight Cotton Fleece' },
-          { label: 'Fit Profile', value: 'Oversized Streetwear Silhouette' },
-          { label: 'Hood & Neck', value: 'Double-Layered Hood with Drawstrings' },
-          { label: 'Graphic Technique', value: 'High-Density Screen Graffiti Print' },
-          { label: 'Stitching Details', value: localProduct.stitching || 'Double-needle reinforced stitching' },
-          { label: 'Care Instructions', value: 'Machine wash cold inside out, tumble dry low' },
-          { label: 'Country of Origin', value: 'Crafted with Pride in India' },
-        ],
+  // Try 5: If slug search failed, search products where slugified name matches decodedId
+  if (!productData) {
+    const { data: allActive } = await adminSupabase
+      .from('products')
+      .select(PRODUCT_DETAIL_SELECT)
+      .eq('is_active', true)
+    if (allActive && allActive.length > 0) {
+      const match = allActive.find((p: any) => {
+        const computed = p.slug || slugify(p.name)
+        return computed.toLowerCase() === decodedId.toLowerCase()
+      })
+      if (match) {
+        productData = match
+        if (!match.slug && match.name) {
+          const generatedSlug = slugify(match.name)
+          adminSupabase.from('products').update({ slug: generatedSlug }).eq('id', match.id).then(() => {})
+        }
       }
-
-      // Mockup-matching 6 similar products
-      const similarProducts = SHOP_PRODUCTS.filter((p) => p.id !== localProduct.id)
-        .slice(0, 6)
-        .map((p) => ({
-          id: p.id,
-          slug: p.slug,
-          name: p.name,
-          category_id: p.category_id,
-          image_url: p.image_url,
-          badge: p.badge,
-          price: p.price,
-          oldPrice: p.oldPrice,
-          discount: p.discount,
-          rating: p.rating,
-          review_count: p.review_count,
-        }))
-
-      return renderProductPage(formattedData, localProduct.category_name, similarProducts, [], null)
     }
+  }
 
-    console.error('Product not found or inactive:', id, productError)
+  if (!productData) {
+    console.error('Product not found in Supabase:', id)
     notFound()
+  }
+
+  // If accessed by raw UUID, redirect to clean SEO-friendly product name slug!
+  const targetSlug = productData.slug || slugify(productData.name)
+  if (targetSlug && decodedId === productData.id && decodedId !== targetSlug) {
+    redirect(`/shop/${targetSlug}`)
   }
 
   // 4. Resolve Category Name for DB product
@@ -438,28 +361,40 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
   const categoryName = category?.name || productData.category_id
 
-  // 5. Fetch Size Chart
-  const sizeChartResult = await getProductSizeChartPublic(productData.id)
-  let sizeChart = null
-  if (sizeChartResult.success && sizeChartResult.data) {
-    sizeChart = {
-      imageUrl: sizeChartResult.data.image_url,
-      title: sizeChartResult.data.name || 'Size Chart',
+  // 5. Fetch Size Chart if product has specific chart
+  if (productData.id && productData.id !== id) {
+    const dbSizeChartResult = await getProductSizeChartPublic(productData.id)
+    if (dbSizeChartResult.success && dbSizeChartResult.data) {
+      sizeChart = {
+        imageUrl: dbSizeChartResult.data.image_url,
+        title: dbSizeChartResult.data.name || 'Size Chart',
+      }
+    } else {
+      sizeChart = null
     }
   }
 
-  // 6. Fetch Similar Products
+  // Ensure size chart is null if explicitly disabled on this product
+  if (
+    productData &&
+    productData.use_global_size_chart === false &&
+    (!productData.size_chart_image_url || productData.size_chart_image_url === 'disabled')
+  ) {
+    sizeChart = null
+  }
+
+  // 6. Fetch Similar Products (Category-based)
   const { data: similarProductsData } = await supabase
     .from('products')
     .select(`
-      id, name, slug, category_id, is_active, badge, rating, featured_image_url,
+      id, name, slug, category_id, is_active, badge, rating, review_count, featured_image_url, color_name,
       product_images ( image_url ),
       product_variants ( id, price, original_price, stock_quantity, is_active )
     `)
     .eq('is_active', true)
     .eq('category_id', productData.category_id)
     .neq('id', productData.id)
-    .limit(6)
+    .limit(12)
 
   const similarProducts =
     similarProductsData && similarProductsData.length > 0
@@ -470,29 +405,20 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             slug: p.slug,
             name: p.name,
             category_id: p.category_id,
+            category_name: categoryName,
             image_url: p.featured_image_url || p.product_images?.[0]?.image_url || '/image.png',
             badge: p.badge,
             price: variant?.price || 1999,
             oldPrice: variant?.original_price || undefined,
-            rating: p.rating || 4.9,
-            review_count: 80,
+            rating: Number(p.rating) || 0,
+            review_count: Number(p.review_count) || 0,
+            color_name: p.color_name,
+            product_images: p.product_images,
+            product_variants: p.product_variants,
+            gallery_images: (p.product_images || []).map((img: any) => img.image_url),
           }
         })
-      : SHOP_PRODUCTS.filter((p) => p.id !== productData.id)
-          .slice(0, 6)
-          .map((p) => ({
-            id: p.id,
-            slug: p.slug,
-            name: p.name,
-            category_id: p.category_id,
-            image_url: p.image_url,
-            badge: p.badge,
-            price: p.price,
-            oldPrice: p.oldPrice,
-            discount: p.discount,
-            rating: p.rating,
-            review_count: p.review_count,
-          }))
+      : []
 
   // 7. Fetch Reviews
   const { data: reviewsData } = await supabase
@@ -510,5 +436,30 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     comment: review.review_text,
   }))
 
-  return renderProductPage(productData, categoryName, similarProducts, reviews, sizeChart)
+  // 8. Fetch Real-time Sales / Sold Count from order_items
+  const { data: orderItemRows } = await supabase
+    .from('order_items')
+    .select('quantity')
+    .eq('product_id', productData.id)
+
+  const totalQuantitySold = (orderItemRows || []).reduce(
+    (acc: number, item: any) => acc + (Number(item.quantity) || 1),
+    0
+  )
+
+  const dynamicReviewCount = reviews.length > 0 ? reviews.length : (Number(productData.review_count) || 0)
+  const dynamicRating = reviews.length > 0
+    ? Number((reviews.reduce((sum: number, r: any) => sum + Number(r.rating || 5), 0) / reviews.length).toFixed(1))
+    : (dynamicReviewCount > 0 ? (Number(productData.rating) || 0) : 0)
+
+  const dynamicProductData = {
+    ...productData,
+    rating: dynamicRating,
+    review_count: dynamicReviewCount,
+    sold_count: totalQuantitySold > 0
+      ? `${totalQuantitySold} sold`
+      : (productData.sold_count || undefined),
+  }
+
+  return renderProductPage(dynamicProductData, categoryName, similarProducts, reviews, sizeChart, currentUser)
 }

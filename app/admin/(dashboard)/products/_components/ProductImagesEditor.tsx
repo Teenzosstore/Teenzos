@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition, useRef, useEffect } from 'react'
-import { CldUploadWidget } from 'next-cloudinary'
+import { ImageKitUploadWidget } from '@/components/ImageKitUploadWidget'
 import { Plus, X, Star, Loader2 } from 'lucide-react'
 import { addProductImage, deleteProductImage, setFeaturedImage, updateProductImageColor } from '@/actions/products'
 import Image from 'next/image'
@@ -21,7 +21,7 @@ type Product = {
   color_name?: string | null
 }
 
-function getCloudinaryErrorMessage(error: unknown) {
+function getImageKitErrorMessage(error: unknown) {
   if (!error || typeof error !== 'object') {
     return 'Image upload failed. Please try again.'
   }
@@ -54,11 +54,12 @@ export function ProductImagesEditor({
   }, [activeTab])
 
   const handleUploadSuccess = (result: any) => {
-    if (result.info && result.info.secure_url) {
+    setUploading(false)
+    if ((result.url || (result.info && (result.url || result.info?.secure_url)))) {
       startTransition(async () => {
         const currentActiveTab = activeTabRef.current
         const uploadColor = currentActiveTab === 'All' || currentActiveTab === 'Default' ? null : currentActiveTab
-        const response = await addProductImage(product.id, result.info.secure_url, uploadColor, result.info.public_id || null)
+        const response = await addProductImage(product.id, (result.url || result.info?.secure_url), uploadColor, (result.fileId || result.info?.public_id) || null)
 
         if (response.error) {
           alert(response.error)
@@ -69,7 +70,7 @@ export function ProductImagesEditor({
 
   const handleUploadError = (error: unknown) => {
     setUploading(false)
-    alert(getCloudinaryErrorMessage(error))
+    alert(getImageKitErrorMessage(error))
   }
 
   const handleDelete = (imageId: string) => {
@@ -134,8 +135,7 @@ export function ProductImagesEditor({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium text-ink">Product Images</h3>
-        <CldUploadWidget
-          signatureEndpoint="/api/cloudinary/sign"
+        <ImageKitUploadWidget
           onSuccess={handleUploadSuccess}
           onOpen={() => setUploading(true)}
           onError={handleUploadError}
@@ -146,7 +146,6 @@ export function ProductImagesEditor({
             multiple: true,
             maxFiles: 5,
             folder: "rawflex/products",
-            resourceType: "image",
             clientAllowedFormats: ["jpg", "jpeg", "png", "webp"],
             maxFileSize: 10 * 1024 * 1024,
           }}
@@ -168,7 +167,7 @@ export function ProductImagesEditor({
               </button>
             )
           }}
-        </CldUploadWidget>
+        </ImageKitUploadWidget>
       </div>
 
       {/* Tabs */}
@@ -218,7 +217,7 @@ export function ProductImagesEditor({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {displayedImages.map((img) => {
           const isFeatured = product.featured_image_url === img.image_url
           return (

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Image from 'next/image'
-import { X, Loader2, Maximize2, Minimize2, Move } from 'lucide-react'
+import { X, Loader2, Maximize2, Minimize2 } from 'lucide-react'
 
 interface SizeChartPopupProps {
   isOpen: boolean
@@ -19,17 +19,62 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrl, title = 'Siz
   const [panPosition, setPanPosition] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
+  const [imageBox, setImageBox] = useState<{ width: number; height: number } | null>(null)
+
   const imageRef = useRef<HTMLImageElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  const updateSize = useCallback(() => {
+    const img = imageRef.current
+    if (!img || img.clientWidth <= 0) return
+    setImageBox((prev) => {
+      if (prev && Math.abs(prev.width - img.clientWidth) < 1 && Math.abs(prev.height - img.clientHeight) < 1) {
+        return prev
+      }
+      return { width: img.clientWidth, height: img.clientHeight }
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!isOpen) return
+    updateSize()
+
+    const img = imageRef.current
+    if (!img) return
+
+    let ro: ResizeObserver | null = null
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => {
+        updateSize()
+      })
+      ro.observe(img)
+    }
+
+    window.addEventListener('resize', updateSize)
+    return () => {
+      if (ro) ro.disconnect()
+      window.removeEventListener('resize', updateSize)
+    }
+  }, [isOpen, updateSize, imageLoaded])
+
+  const resetZoom = useCallback(() => {
+    setZoomLevel(1)
+    setPanPosition({ x: 0, y: 0 })
+    setIsZoomed(false)
+    setIsPanning(false)
+  }, [])
 
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
+    } else {
+      resetZoom()
     }
     return () => {
       document.body.style.overflow = 'unset'
     }
-  }, [isOpen])
+  }, [isOpen, resetZoom])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -43,76 +88,99 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrl, title = 'Siz
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose, isZoomed])
-
-  const resetZoom = useCallback(() => {
-    setZoomLevel(1)
-    setPanPosition({ x: 0, y: 0 })
-    setIsZoomed(false)
-  }, [])
+  }, [isOpen, onClose, isZoomed, resetZoom])
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (!isZoomed) return
     e.preventDefault()
     
-    const delta = e.deltaY > 0 ? -0.1 : 0.1
-    const newZoom = Math.min(Math.max(zoomLevel + delta, 1), 5)
+    const delta = e.deltaY > 0 ? -0.15 : 0.15
+    const newZoom = Math.min(Math.max(zoomLevel + delta, 1), 4)
     setZoomLevel(newZoom)
     
-    if (newZoom === 1) {
+    if (newZoom <= 1) {
       setPanPosition({ x: 0, y: 0 })
       setIsZoomed(false)
+      setIsPanning(false)
     } else {
       setIsZoomed(true)
     }
   }, [zoomLevel, isZoomed])
 
+  // Mouse pan initiation - Always prevent default to block browser native drag ghost
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
     if (!isZoomed || zoomLevel <= 1) return
     setIsPanning(true)
     setPanStart({ x: e.clientX - panPosition.x, y: e.clientY - panPosition.y })
-    e.preventDefault()
   }, [isZoomed, zoomLevel, panPosition])
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+  // Global mouse move & up so panning never gets stuck or tears when moving quickly
+  useEffect(() => {
     if (!isPanning) return
-    setPanPosition({
-      x: e.clientX - panStart.x,
-      y: e.clientY - panStart.y
-    })
-  }, [isPanning, panStart])
 
-  const handleMouseUp = useCallback(() => {
-    setIsPanning(false)
-  }, [])
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      const deltaX = e.clientX - panStart.x
+      const deltaY = e.clientY - panStart.y
+      const boundX = Math.max(80, ((zoomLevel - 1) * (imageBox?.width || 400)) / 2)
+      const boundY = Math.max(80, ((zoomLevel - 1) * (imageBox?.height || 400)) / 2)
 
+      setPanPosition({
+        x: Math.max(-boundX, Math.min(boundX, deltaX)),
+        y: Math.max(-boundY, Math.min(boundY, deltaY)),
+      })
+    }
+
+    const handleWindowMouseUp = () => {
+      setIsPanning(false)
+    }
+
+    window.addEventListener('mousemove', handleWindowMouseMove)
+    window.addEventListener('mouseup', handleWindowMouseUp)
+
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove)
+      window.removeEventListener('mouseup', handleWindowMouseUp)
+    }
+  }, [isPanning, panStart, zoomLevel, imageBox])
+
+  // Touch handlers
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (!isZoomed || zoomLevel <= 1) return
-    const touch = e.touches[0]
-    setIsPanning(true)
-    setPanStart({ x: touch.clientX - panPosition.x, y: touch.clientY - panPosition.y })
+    if (e.touches.length === 1) {
+      const touch = e.touches[0]
+      setIsPanning(true)
+      setPanStart({ x: touch.clientX - panPosition.x, y: touch.clientY - panPosition.y })
+    }
   }, [isZoomed, zoomLevel, panPosition])
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!isPanning) return
+    if (!isPanning || e.touches.length !== 1) return
     const touch = e.touches[0]
+    const deltaX = touch.clientX - panStart.x
+    const deltaY = touch.clientY - panStart.y
+    const boundX = Math.max(80, ((zoomLevel - 1) * (imageBox?.width || 400)) / 2)
+    const boundY = Math.max(80, ((zoomLevel - 1) * (imageBox?.height || 400)) / 2)
+
     setPanPosition({
-      x: touch.clientX - panStart.x,
-      y: touch.clientY - panStart.y
+      x: Math.max(-boundX, Math.min(boundX, deltaX)),
+      y: Math.max(-boundY, Math.min(boundY, deltaY)),
     })
     e.preventDefault()
-  }, [isPanning, panStart])
+  }, [isPanning, panStart, zoomLevel, imageBox])
 
   const handleTouchEnd = useCallback(() => {
     setIsPanning(false)
   }, [])
 
-  const handleDoubleClick = useCallback(() => {
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
     if (isZoomed) {
       resetZoom()
     } else {
       setIsZoomed(true)
       setZoomLevel(2)
+      setPanPosition({ x: 0, y: 0 })
     }
   }, [isZoomed, resetZoom])
 
@@ -122,22 +190,28 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrl, title = 'Siz
     } else {
       setIsZoomed(true)
       setZoomLevel(2)
+      setPanPosition({ x: 0, y: 0 })
     }
   }, [isZoomed, resetZoom])
 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm select-none" 
+      onClick={onClose}
+      onDragStart={(e) => e.preventDefault()}
+    >
       <div 
         ref={containerRef}
-        className={`relative max-w-xl max-h-[80vh] overflow-hidden transition-all duration-300 rounded-3xl ${
-          isZoomed ? 'fixed inset-0 max-w-full max-h-full z-[60] rounded-3xl' : ''
+        className={`relative w-auto max-w-[92vw] sm:max-w-[480px] md:max-w-[500px] overflow-hidden transition-all duration-300 rounded-[5px] flex items-center justify-center select-none ${
+          isZoomed ? 'fixed inset-0 max-w-full max-h-full z-[60] rounded-none' : ''
         }`}
         onClick={(e) => e.stopPropagation()}
+        onDragStart={(e) => e.preventDefault()}
       >
         {/* Image Content - with zoom/pan controls */}
-        <div className="relative w-full h-[70vh] flex items-center justify-center bg-transparent rounded-3xl">
+        <div className={`relative w-full ${isZoomed ? 'h-full' : 'max-h-[52vh] sm:max-h-[58vh]'} flex items-center justify-center bg-transparent rounded-[5px]`}>
           {imageError ? (
             <div className="flex flex-col items-center justify-center text-center text-white/80 p-4">
               <p className="font-medium mb-2">Failed to load size chart image</p>
@@ -152,7 +226,11 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrl, title = 'Siz
               </button>
             </div>
           ) : (
-            <>
+            <div 
+              ref={wrapperRef}
+              className="relative inline-flex items-center justify-center max-w-full max-h-full select-none"
+              onDragStart={(e) => e.preventDefault()}
+            >
               {!imageLoaded && (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <Loader2 className="w-8 h-8 animate-spin text-white" />
@@ -163,63 +241,78 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrl, title = 'Siz
                 src={imageUrl}
                 alt={title}
                 width={1200}
-                height={1600}
-                className={`max-w-full max-h-full w-auto h-auto object-contain transition-opacity duration-300 cursor-${isZoomed && zoomLevel > 1 ? 'grab' : 'default'} ${isPanning ? 'cursor-grabbing' : ''} ${
-                  imageLoaded ? 'opacity-100' : 'opacity-0'
-                }`}
+                height={800}
+                unoptimized={imageUrl?.startsWith('http')}
+                draggable={false}
+                onDragStart={(e) => {
+                  e.preventDefault()
+                  return false
+                }}
+                className={`max-w-full max-h-[50vh] sm:max-h-[56vh] w-auto h-auto object-contain rounded-[5px] select-none ${
+                  isZoomed && zoomLevel > 1 ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default'
+                } ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                 style={{
                   transform: `scale(${zoomLevel}) translate(${panPosition.x / zoomLevel}px, ${panPosition.y / zoomLevel}px)`,
                   transformOrigin: 'center center',
-                  transition: isPanning || isZoomed ? 'none' : 'transform 0.2s ease-out, opacity 0.3s ease-out',
+                  transition: isPanning ? 'none' : 'transform 0.2s ease-out, opacity 0.3s ease-out',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  touchAction: isZoomed && zoomLevel > 1 ? 'none' : 'auto',
+                  WebkitUserDrag: 'none',
+                } as React.CSSProperties}
+                onLoad={() => {
+                  setImageLoaded(true)
+                  updateSize()
+                  requestAnimationFrame(updateSize)
                 }}
-                onLoad={() => setImageLoaded(true)}
                 onError={() => {
                   setImageLoaded(true)
                   setImageError(true)
                 }}
                 onWheel={handleWheel}
                 onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
                 onDoubleClick={handleDoubleClick}
                 priority
               />
-            </>
-          )}
 
-          {/* Top controls - Expand/Zoom on LEFT, Close on RIGHT */}
-          <div className="absolute top-3 left-3 right-3 flex items-start justify-between z-10 pointer-events-none">
-            <div className="pointer-events-auto">
-              <button
-                onClick={toggleZoom}
-                className="p-2 bg-black/60 hover:bg-black/80 text-white rounded-full transition-colors backdrop-blur-sm shadow-lg"
-                aria-label={isZoomed ? 'Reset zoom' : 'Zoom in'}
-                title={isZoomed ? 'Click to reset zoom (or double-click image)' : 'Click to zoom (scroll to zoom, drag to pan)'}
+              {/* Top controls - Inside image: Expand/Zoom on LEFT, Close on RIGHT */}
+              <div 
+                className={`absolute ${
+                  isZoomed ? 'top-4 left-4 right-4 fixed z-50' : 'top-2 sm:top-2.5 left-2 sm:left-2.5 right-2 sm:right-2.5'
+                } flex items-start justify-between z-10 pointer-events-none`}
               >
-                {isZoomed ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
-              </button>
-            </div>
-            <div className="pointer-events-auto">
-              <button
-                onClick={onClose}
-                className="p-2 bg-black/60 hover:bg-black/80 text-white rounded-full transition-colors backdrop-blur-sm shadow-lg"
-                aria-label="Close size chart"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Zoom indicator */}
-          {isZoomed && zoomLevel > 1 && (
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-              <div className="bg-black/70 text-white text-xs px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/20">
-                {Math.round(zoomLevel * 100)}% • Drag to pan • Scroll to zoom
+                <div className="pointer-events-auto">
+                  <button
+                    onClick={toggleZoom}
+                    className="p-1.5 sm:p-2 bg-black/60 hover:bg-black/85 text-white rounded-full transition-colors backdrop-blur-sm shadow-md cursor-pointer"
+                    aria-label={isZoomed ? 'Reset zoom' : 'Zoom in'}
+                    title={isZoomed ? 'Click to reset zoom (or double-click image)' : 'Click to zoom (scroll to zoom, drag to pan)'}
+                  >
+                    {isZoomed ? <Minimize2 className="w-4 h-4 sm:w-4.5 sm:h-4.5" /> : <Maximize2 className="w-4 h-4 sm:w-4.5 sm:h-4.5" />}
+                  </button>
+                </div>
+                <div className="pointer-events-auto">
+                  <button
+                    onClick={onClose}
+                    className="p-1.5 sm:p-2 bg-black/60 hover:bg-black/85 text-white rounded-full transition-colors backdrop-blur-sm shadow-md cursor-pointer"
+                    aria-label="Close size chart"
+                  >
+                    <X className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                  </button>
+                </div>
               </div>
+
+              {/* Zoom indicator */}
+              {isZoomed && zoomLevel > 1 && (
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+                  <div className="bg-black/70 text-white text-xs px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/20 select-none">
+                    {Math.round(zoomLevel * 100)}% • Drag to pan • Scroll to zoom
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

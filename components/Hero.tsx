@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 
 // ==========================================
 // TYPES & DATA
@@ -193,16 +193,37 @@ function IconStarOutline({ className = "" }: { className?: string }) {
 
 export default function Hero({
   products = HERO_PRODUCTS,
+  slides,
+  leftText,
 }: {
   products?: HeroProductItem[];
   slides?: any[];
   backgroundImages?: any[];
   leftText?: any;
 }) {
+  // Use slides from Supabase if present, or fallback to products/HERO_PRODUCTS
+  const displayProducts: HeroProductItem[] =
+    slides && slides.length > 0
+      ? slides
+          .filter((s: any) => s.is_active !== false)
+          .map((s: any, idx: number) => ({
+            id: s.id || `slide-${idx}`,
+            name: s.title || `Cyber Bunny Hoodie ${idx + 1}`,
+            colorName: s.subtitle || `Style ${idx + 1}`,
+            image: s.image_url,
+            thumbnail: s.image_url,
+            alt: s.title || "TeenZos Streetwear Hoodie",
+          }))
+      : products && products.length > 0
+      ? products
+      : HERO_PRODUCTS;
+
+  const finalProducts = displayProducts.length > 0 ? displayProducts : HERO_PRODUCTS;
+
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isFading, setIsFading] = useState(false);
 
-  const activeProduct = products[selectedIndex] || products[0];
+  const activeProduct = finalProducts[selectedIndex] || finalProducts[0];
 
   const handleSelectProduct = useCallback(
     (index: number) => {
@@ -211,10 +232,34 @@ export default function Hero({
       setTimeout(() => {
         setSelectedIndex(index);
         setIsFading(false);
-      }, 140);
+      }, 130);
     },
     [selectedIndex]
   );
+
+  // Automatic slow & infinite photo rotation (synchronized with thumbnail switcher)
+  useEffect(() => {
+    if (!finalProducts || finalProducts.length <= 1) return;
+
+    const timer = setInterval(() => {
+      setIsFading(true);
+      setTimeout(() => {
+        setSelectedIndex((prev) => (prev + 1) % finalProducts.length);
+        setIsFading(false);
+      }, 130);
+    }, 2000); // 2 seconds slow, smooth rotation
+
+    return () => clearInterval(timer);
+  }, [finalProducts, selectedIndex]);
+
+  const eyebrow = leftText?.eyebrow || "STREETWEAR";
+  const headlineTop = leftText?.headline_top || "EXPRESS WHAT";
+  const headlineAccent = leftText?.headline_accent || "MOVES YOU";
+  const subtitle = leftText?.subtitle || "Bold designs. Premium comfort.\nMore than clothes, it’s a mindset.";
+  const buttonText = leftText?.button_text || "Shop Now";
+  const buttonLink = leftText?.button_link || "/shop";
+  const secondaryButtonText = leftText?.secondary_button_text || "Explore Collections";
+  const secondaryButtonLink = leftText?.secondary_button_link || "/shop";
 
   return (
     <section
@@ -224,7 +269,7 @@ export default function Hero({
     >
       {/* ── Preload hidden container for instant switcher switching ── */}
       <div className="hidden" aria-hidden="true">
-        {products.map((p) => (
+        {finalProducts.map((p) => (
           <Image
             key={p.id}
             src={p.image}
@@ -252,107 +297,105 @@ export default function Hero({
       </div>
 
       {/* ── Main Content Container with Optimized Compact Height ── */}
-      <div className="relative z-10 max-w-[1380px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 pt-[90px] sm:pt-[98px] md:pt-[106px] lg:pt-[94px] pb-6 sm:pb-8 lg:pb-6 min-h-[auto] lg:min-h-[580px] xl:min-h-[640px] flex flex-col justify-center">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-4 items-center w-full my-auto">
+      <div className="relative z-10 max-w-[1380px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 pt-[108px] sm:pt-[116px] md:pt-[124px] lg:pt-[116px] pb-4 sm:pb-8 lg:pb-6 min-h-[auto] lg:min-h-[580px] xl:min-h-[640px] flex flex-col justify-center">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 sm:gap-6 lg:gap-4 items-center w-full my-auto">
           
           {/* =========================================================
               LEFT COLUMN: Brand Copy, CTAs, Trust Indicators (~45%)
               ========================================================= */}
-          <div className="lg:col-span-6 xl:col-span-5 flex flex-col justify-center z-10 py-2 sm:py-4">
+          <div className="lg:col-span-6 xl:col-span-5 flex flex-col items-center text-center lg:items-start lg:text-left justify-center z-10 py-1 sm:py-4">
             {/* Eyebrow */}
-            <div className="mb-1.5 sm:mb-2">
-              <span className="text-[11px] sm:text-[12px] font-bold tracking-[0.26em] text-[#0B0D0E] uppercase">
-                STREETWEAR
+            <div className="mb-2 sm:mb-2">
+              <span className="text-[11px] sm:text-[12px] font-bold tracking-[0.26em] text-[#0B0D0E] uppercase inline-block">
+                {eyebrow}
               </span>
             </div>
 
             {/* Headline */}
-            <h1 className="flex flex-col uppercase tracking-tight">
-              {/* Line 1: EXPRESS */}
-              <span className="font-display font-black text-[#0B0D0E] text-[3.2rem] sm:text-[4.2rem] md:text-[4.8rem] lg:text-[4.4rem] xl:text-[5.2rem] leading-[0.88]">
-                  WHAT
-                EXPRESS 
+            <h1 className="flex flex-col items-center lg:items-start uppercase tracking-tight w-full">
+              {/* Line 1: EXPRESS WHAT */}
+              <span className="font-display font-black text-[#0B0D0E] text-[2.2rem] xs:text-[2.7rem] sm:text-[4rem] md:text-[4.8rem] lg:text-[4.4rem] xl:text-[5.2rem] leading-[0.9] mb-1">
+                {headlineTop}
               </span>
 
-              {/* Line 3: MOVES YOU + Brush Underline */}
-              <div className="relative inline-block mt-1 sm:mt-6">
-                <span className="font-display font-black italic tracking-tight text-[#F72585] text-[3rem] sm:text-[4rem] md:text-[4.6rem] lg:text-[4.2rem] xl:text-[5rem] leading-[0.88] block transform -skew-x-6">
-                  MOVES YOU
+              {/* Line 2: MOVES YOU + Brush Underline */}
+              <div className="relative inline-block mt-1 sm:mt-3 lg:mt-5 mx-auto lg:mx-0">
+                <span className="font-display font-black tracking-tight text-[#F72585] text-[2.1rem] xs:text-[2.5rem] sm:text-[3.8rem] md:text-[4.6rem] lg:text-[4.2rem] xl:text-[5rem] leading-[0.9] block transform -skew-x-6">
+                  {headlineAccent}
                 </span>
                 {/* Brush underline stroke */}
-                <div className="w-[88%] sm:w-[80%] mt-1 sm:mt-1.5 transform -rotate-1">
+                <div className="w-[88%] sm:w-[80%] mt-0.5 sm:mt-1.5 mx-auto lg:mx-0 transform -rotate-1">
                   <PinkBrushUnderline className="w-full h-2 sm:h-3 md:h-3.5 text-[#F72585]" />
                 </div>
               </div>
             </h1>
 
             {/* Supporting Text */}
-            <div className="mt-3.5 sm:mt-4 text-[#1A1E20] text-xs sm:text-sm md:text-[15px] font-medium leading-relaxed max-w-[420px]">
-              <p>Bold designs. Premium comfort.</p>
-              <p>More than clothes, it’s a mindset.</p>
+            <div className="mt-2.5 sm:mt-4 text-[#1A1E20] text-xs sm:text-sm md:text-[15px] font-medium leading-relaxed max-w-[420px] mx-auto lg:mx-0">
+              <p className="whitespace-pre-line">{subtitle}</p>
             </div>
 
             {/* Two CTA Buttons */}
-            <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 mt-5 sm:mt-6">
+            <div className="flex flex-row items-center justify-center lg:justify-start gap-2.5 sm:gap-3 mt-3.5 sm:mt-6 w-full sm:w-auto">
               {/* Primary Pink Button */}
               <Link
-                href="/shop"
-                className="group w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-[#F72585] hover:bg-[#D91668] text-white font-semibold text-xs sm:text-sm px-6 sm:px-7 py-3 sm:py-3.5 rounded-[5px] shadow-md shadow-[#F72585]/30 hover:shadow-lg hover:shadow-[#F72585]/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
+                href={buttonLink}
+                className="group flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 sm:gap-2 bg-[#F72585] hover:bg-[#D91668] text-white font-semibold text-xs sm:text-sm px-4 sm:px-7 py-2.5 sm:py-3.5 rounded-[5px] shadow-md shadow-[#F72585]/30 hover:shadow-lg hover:shadow-[#F72585]/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
               >
-                <span>Shop Now</span>
-                <span className="transform group-hover:translate-x-1 transition-transform duration-200 text-base leading-none">
+                <span>{buttonText}</span>
+                <span className="transform group-hover:translate-x-1 transition-transform duration-200 text-sm sm:text-base leading-none">
                   →
                 </span>
               </Link>
 
               {/* Secondary Outline Button */}
               <Link
-                href="/shop"
-                className="group w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-transparent hover:bg-black/5 text-[#0B0D0E] font-semibold text-xs sm:text-sm px-5 sm:px-6 py-3 sm:py-3.5 rounded-[5px] border-[1.8px] border-[#0B0D0E]/80 hover:border-[#0B0D0E] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
+                href={secondaryButtonLink}
+                className="group flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 sm:gap-2 bg-transparent hover:bg-black/5 text-[#0B0D0E] font-semibold text-xs sm:text-sm px-3.5 sm:px-6 py-2.5 sm:py-3.5 rounded-[5px] border-[1.8px] border-[#0B0D0E]/80 hover:border-[#0B0D0E] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 whitespace-nowrap"
               >
-                <span>Explore Collections</span>
-                <span className="transform group-hover:translate-x-1 transition-transform duration-200 text-base leading-none">
+                <span>{secondaryButtonText}</span>
+                <span className="transform group-hover:translate-x-1 transition-transform duration-200 text-sm sm:text-base leading-none">
                   →
                 </span>
               </Link>
             </div>
 
-            {/* Trust Indicators */}
-            <div className="mt-6 sm:mt-8 pt-4 sm:pt-5 border-t border-black/10 grid grid-cols-3 gap-2 sm:gap-3 max-w-[480px]">
+            {/* Trust Indicators (Desktop) */}
+            <div className="hidden lg:grid mt-8 pt-5 border-t border-black/10 grid-cols-3 gap-3 max-w-[480px] w-full mx-0">
               {/* Trust 1: Free Shipping */}
-              <div className="flex items-start sm:items-center gap-2">
-                <IconTruck className="w-4 h-4 sm:w-5 sm:h-5 text-[#0B0D0E] shrink-0 stroke-[2.2] mt-0.5 sm:mt-0" />
+              <div className="flex flex-col sm:flex-row items-center text-center sm:text-left gap-1 sm:gap-2">
+                <IconTruck className="w-4 h-4 sm:w-5 sm:h-5 text-[#0B0D0E] shrink-0 stroke-[2.2]" />
                 <div className="flex flex-col">
-                  <span className="font-bold text-[11px] sm:text-[12px] text-[#0B0D0E] leading-tight">
+                  <span className="font-bold text-[10px] sm:text-[12px] text-[#0B0D0E] leading-tight">
                     Free Shipping
                   </span>
-                  <span className="text-[10px] sm:text-[10.5px] text-[#6B7073] font-normal leading-tight">
+                  <span className="text-[9px] sm:text-[10.5px] text-[#6B7073] font-normal leading-tight">
                     On all orders
                   </span>
                 </div>
               </div>
 
               {/* Trust 2: Premium Quality */}
-              <div className="flex items-start sm:items-center gap-2">
-                <IconShieldCheck className="w-4 h-4 sm:w-5 sm:h-5 text-[#0B0D0E] shrink-0 stroke-[2.2] mt-0.5 sm:mt-0" />
+              <div className="flex flex-col sm:flex-row items-center text-center sm:text-left gap-1 sm:gap-2">
+                <IconShieldCheck className="w-4 h-4 sm:w-5 sm:h-5 text-[#0B0D0E] shrink-0 stroke-[2.2]" />
                 <div className="flex flex-col">
-                  <span className="font-bold text-[11px] sm:text-[12px] text-[#0B0D0E] leading-tight">
+                  <span className="font-bold text-[10px] sm:text-[12px] text-[#0B0D0E] leading-tight">
                     Premium Quality
                   </span>
-                  <span className="text-[10px] sm:text-[10.5px] text-[#6B7073] font-normal leading-tight">
+                  <span className="text-[9px] sm:text-[10.5px] text-[#6B7073] font-normal leading-tight">
                     Built to last
                   </span>
                 </div>
               </div>
 
               {/* Trust 3: 10K+ Customers */}
-              <div className="flex items-start sm:items-center gap-2">
-                <IconStarOutline className="w-4 h-4 sm:w-5 sm:h-5 text-[#0B0D0E] shrink-0 stroke-[2.2] mt-0.5 sm:mt-0" />
+              <div className="flex flex-col sm:flex-row items-center text-center sm:text-left gap-1 sm:gap-2">
+                <IconStarOutline className="w-4 h-4 sm:w-5 sm:h-5 text-[#0B0D0E] shrink-0 stroke-[2.2]" />
                 <div className="flex flex-col">
-                  <span className="font-bold text-[11px] sm:text-[12px] text-[#0B0D0E] leading-tight">
+                  <span className="font-bold text-[10px] sm:text-[12px] text-[#0B0D0E] leading-tight">
                     10K+ Customers
                   </span>
-                  <span className="text-[10px] sm:text-[10.5px] text-[#6B7073] font-normal leading-tight">
+                  <span className="text-[9px] sm:text-[10.5px] text-[#6B7073] font-normal leading-tight">
                     Love TeenZos
                   </span>
                 </div>
@@ -363,17 +406,18 @@ export default function Hero({
           {/* =========================================================
               RIGHT COLUMN: Main Product & Interactive Stage (~55%)
               ========================================================= */}
-          <div className="lg:col-span-6 xl:col-span-7 relative flex flex-col items-center justify-center min-h-[320px] sm:min-h-[380px] lg:min-h-[430px] xl:min-h-[470px] w-full pt-4">
+          <div className="lg:col-span-6 xl:col-span-7 relative flex flex-col items-center justify-center min-h-[220px] xs:min-h-[260px] sm:min-h-[380px] lg:min-h-[490px] xl:min-h-[550px] w-full pt-1 sm:pt-4">
             
-            {/* Top-Right Pink Graffiti Crown */}
-            <div className="absolute top-1 sm:top-2 right-[18%] sm:right-[22%] lg:right-[18%] z-10 transform rotate-12 pointer-events-none">
-              <PinkGraffitiCrown className="w-8 h-6 sm:w-11 sm:h-9 md:w-13 md:h-10" />
-            </div>
+            {/* Top-Right Streetwear Badge: Crown Icon with Handwritten Statement Directly Underneath */}
+            <div className="absolute top-1 sm:top-4 md:top-6 lg:top-8 right-1 sm:right-3 md:right-5 lg:right-3 xl:right-6 z-10 flex flex-col items-center pointer-events-none transform rotate-[-8deg] sm:rotate-[-10deg]">
+              {/* Pink Graffiti Crown Icon */}
+              <div className="transform rotate-12 mb-0.5 sm:mb-1.5">
+                <PinkGraffitiCrown className="w-5 h-4 xs:w-6 xs:h-5 sm:w-9 sm:h-7 md:w-11 md:h-9 lg:w-12 lg:h-10" />
+              </div>
 
-            {/* Right-Side Handwritten Statement */}
-            <div className="absolute top-6 sm:top-10 right-1 sm:right-4 lg:right-1 z-10 text-left pointer-events-none transform rotate-[-10deg]">
+              {/* Handwritten Statement Directly Underneath Icon */}
               <p
-                className="font-marker font-bold text-[#0B0D0E] text-[11px] sm:text-xs md:text-sm lg:text-[15px] leading-[1.15] tracking-wide uppercase"
+                className="font-marker font-bold text-[#0B0D0E] text-[8px] xs:text-[9.5px] sm:text-xs md:text-sm lg:text-[15px] leading-[1.1] sm:leading-[1.15] tracking-wide uppercase text-center select-none"
                 style={{ fontFamily: "var(--font-marker)" }}
               >
                 NOT
@@ -388,29 +432,32 @@ export default function Hero({
               </p>
             </div>
 
-            {/* Right-Side Graffiti Cross ✕ */}
-            <div className="absolute bottom-[22%] sm:bottom-[24%] right-3 sm:right-6 lg:right-3 z-10 pointer-events-none transform rotate-12">
-              <GraffitiCross className="w-5 h-5 sm:w-6 sm:h-6 text-[#0B0D0E]" />
-            </div>
 
-            {/* Main Product Hoodie Image (Compact & Crisp) */}
-            <div className="relative w-full max-w-[300px] sm:max-w-[380px] md:max-w-[420px] lg:max-w-[450px] xl:max-w-[480px] aspect-[1319/1192] flex items-center justify-center my-auto">
-              <div
-                className={`relative w-full h-full transition-all duration-300 ease-out transform ${
-                  isFading
-                    ? "opacity-40 scale-[0.98] blur-[1px]"
-                    : "opacity-100 scale-100 blur-0"
-                }`}
-              >
-                <Image
-                  src={activeProduct.image}
-                  alt={activeProduct.alt}
-                  fill
-                  priority
-                  unoptimized
-                  sizes="(max-width: 768px) 85vw, (max-width: 1200px) 45vw, 38vw"
-                  className="object-contain object-center drop-shadow-[0_20px_30px_rgba(0,0,0,0.20)] pointer-events-none"
-                />
+            {/* Main Product Hoodie Image (Expanded Desktop Size with Crisp Proportions) */}
+            <div className="relative w-full max-w-[250px] xs:max-w-[280px] sm:max-w-[360px] md:max-w-[380px] lg:max-w-[490px] xl:max-w-[560px] aspect-[1319/1192] flex items-center justify-center my-auto">
+              {/* Subtle ambient streetwear aura glow */}
+              <div className="absolute inset-4 sm:inset-8 bg-gradient-to-tr from-[#F72585]/15 via-[#36B8C5]/15 to-transparent rounded-full blur-2xl pointer-events-none -z-10 animate-pulse" />
+
+              {/* Smooth Floating Levitation Wrapper */}
+              <div className="relative w-full h-full animate-floatSlow flex items-center justify-center">
+                {/* Image Swap Pop/Fade Animation */}
+                <div
+                  className={`relative w-full h-full transition-all duration-300 ease-out transform ${
+                    isFading
+                      ? "opacity-20 scale-95 translate-y-1 rotate-[-1deg] blur-[0.5px]"
+                      : "opacity-100 scale-100 translate-y-0 rotate-0 blur-0"
+                  }`}
+                >
+                  <Image
+                    src={activeProduct.image}
+                    alt={activeProduct.alt}
+                    fill
+                    priority
+                    unoptimized
+                    sizes="(max-width: 768px) 70vw, (max-width: 1200px) 45vw, 38vw"
+                    className="object-contain object-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.22)] pointer-events-none"
+                  />
+                </div>
               </div>
             </div>
 
@@ -418,13 +465,13 @@ export default function Hero({
                 PRODUCT THUMBNAIL SWITCHER
                 Floating rounded container at the bottom-right of the hero
                 ========================================================= */}
-            <div className="w-full sm:w-auto flex justify-center sm:justify-end lg:absolute lg:bottom-1 lg:right-1 z-20 mt-3 sm:mt-0">
+            <div className="w-full sm:w-auto flex justify-center sm:justify-end lg:absolute lg:bottom-1 lg:right-1 z-20 mt-1.5 sm:mt-0">
               <div
                 role="tablist"
                 aria-label="Product color variants switcher"
-                className="inline-flex items-center gap-1.5 sm:gap-2 p-1.5 sm:p-2 bg-white/95 backdrop-blur-md rounded-2xl border border-black/10 shadow-xl shadow-black/10"
+                className="inline-flex items-center gap-1.5 sm:gap-2 p-1 sm:p-2 bg-white/95 backdrop-blur-md rounded-[5px] border border-black/10 shadow-lg shadow-black/5"
               >
-                {products.map((item, idx) => {
+                {finalProducts.map((item, idx) => {
                   const isSelected = idx === selectedIndex;
                   return (
                     <button
@@ -440,13 +487,13 @@ export default function Hero({
                           handleSelectProduct(idx);
                         }
                       }}
-                      className={`relative w-11 h-11 sm:w-12 sm:h-12 md:w-13 md:h-13 rounded-xl overflow-hidden cursor-pointer transition-all duration-200 outline-none flex items-center justify-center ${
+                      className={`relative w-9 h-9 sm:w-12 sm:h-12 md:w-13 md:h-13 rounded-[5px] overflow-hidden cursor-pointer transition-all duration-200 outline-none flex items-center justify-center ${
                         isSelected
-                          ? "border-2 border-[#F72585] ring-2 ring-[#F72585]/20 bg-pink-50/20 shadow-sm scale-105"
-                          : "border border-black/10 bg-stone-100/70 hover:border-black/30 hover:scale-105 hover:bg-stone-100"
+                          ? "border-2 border-[#F72585] ring-2 ring-[#F72585]/20 bg-pink-50/20 shadow-sm"
+                          : "border border-black/10 bg-stone-100/70 hover:border-black/30 hover:bg-stone-100"
                       }`}
                     >
-                      <div className="relative w-full h-full p-1">
+                      <div className="relative w-full h-full p-0.5 sm:p-1">
                         <Image
                           src={item.thumbnail}
                           alt={item.alt}
@@ -462,6 +509,48 @@ export default function Hero({
               </div>
             </div>
 
+          </div>
+        </div>
+
+        {/* Trust Indicators (Mobile: placed at the end of Hero section) */}
+        <div className="lg:hidden bg-white mt-3 sm:mt-5 pt-3 sm:pt-4 border-t border-black/10 grid grid-cols-3 gap-1.5 sm:gap-3 max-w-[570px] w-full mx-auto py-4 rounded">
+          {/* Trust 1: Free Shipping */}
+          <div className="flex flex-col sm:flex-row items-center text-center sm:text-left gap-1 sm:gap-2">
+            <IconTruck className="w-4 h-4 sm:w-5 sm:h-5 text-[#0B0D0E] shrink-0 stroke-[2.2]" />
+            <div className="flex flex-col">
+              <span className="font-bold text-[10px] sm:text-[12px] text-[#0B0D0E] leading-tight">
+                Free Shipping
+              </span>
+              <span className="text-[9px] sm:text-[10.5px] text-[#6B7073] font-normal leading-tight">
+                On all orders
+              </span>
+            </div>
+          </div>
+
+          {/* Trust 2: Premium Quality */}
+          <div className="flex flex-col sm:flex-row items-center text-center sm:text-left gap-1 sm:gap-2">
+            <IconShieldCheck className="w-4 h-4 sm:w-5 sm:h-5 text-[#0B0D0E] shrink-0 stroke-[2.2]" />
+            <div className="flex flex-col">
+              <span className="font-bold text-[10px] sm:text-[12px] text-[#0B0D0E] leading-tight">
+                Premium Quality
+              </span>
+              <span className="text-[9px] sm:text-[10.5px] text-[#6B7073] font-normal leading-tight">
+                Built to last
+              </span>
+            </div>
+          </div>
+
+          {/* Trust 3: 10K+ Customers */}
+          <div className="flex flex-col sm:flex-row items-center text-center sm:text-left gap-1 sm:gap-2">
+            <IconStarOutline className="w-4 h-4 sm:w-5 sm:h-5 text-[#0B0D0E] shrink-0 stroke-[2.2]" />
+            <div className="flex flex-col">
+              <span className="font-bold text-[10px] sm:text-[12px] text-[#0B0D0E] leading-tight">
+                10K+ Customers
+              </span>
+              <span className="text-[9px] sm:text-[10.5px] text-[#6B7073] font-normal leading-tight">
+                Love TeenZos
+              </span>
+            </div>
           </div>
         </div>
       </div>

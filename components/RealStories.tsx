@@ -52,7 +52,7 @@ export default function RealStories() {
           {/* =========================================================
               LEFT COLUMN: Tilted Overlapping Streetwear Photos (~55%)
               ========================================================= */}
-          <div className="lg:col-span-6 relative flex items-center justify-center py-4 sm:py-6">
+          <div className="lg:col-span-6 relative flex items-center justify-center py-4 sm:py-6 px-[10px]">
             <div className="relative w-full max-w-[560px] aspect-[4/3] flex items-center justify-center">
               
               {/* Photo 1: Left Main Card (r1.jpg - Black Tee Good Bad Habits) */}

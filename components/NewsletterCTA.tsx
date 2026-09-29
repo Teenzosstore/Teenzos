@@ -273,7 +273,7 @@ export default function NewsletterCTA() {
 
       if (res.ok) {
         setSubscribed(true);
-        showToast("Welcome to the TeenZos crew!", "success");
+        showToast(data.message || "Welcome to the TeenZos VIP crew! Check your inbox for your 10% code.", "success");
       } else {
         if (res.status === 409) {
           setSubscribed(true);
@@ -284,7 +284,7 @@ export default function NewsletterCTA() {
       }
     } catch {
       setSubscribed(true);
-      showToast("Welcome to the TeenZos crew!", "success");
+      showToast("Welcome to the TeenZos VIP crew! Check your inbox for your 10% code.", "success");
     } finally {
       setLoading(false);
     }
@@ -328,7 +328,7 @@ export default function NewsletterCTA() {
               ========================================================= */}
           <div className="lg:col-span-5 xl:col-span-5 flex flex-col justify-center text-left pl-3 sm:pl-4 md:pl-0">
             {/* Eyebrow: STAY IN THE LOOP — */}
-            <div className="flex items-center gap-2 mb-2 sm:mb-2.5">
+            <div className="flex items-center gap-2 mb-[15px] sm:mb-2.5">
               <span className="font-body font-bold text-[10px] sm:text-xs tracking-[0.22em] text-[#22262A] uppercase">
                 STAY IN THE LOOP
               </span>
@@ -338,14 +338,14 @@ export default function NewsletterCTA() {
             {/* Headline: JOIN OUR NEWSLETTER */}
             <div className="relative flex flex-col items-start">
               {/* Line 1: JOIN OUR */}
-              <h2 className="font-display text-4xl sm:text-5xl md:text-[56px] lg:text-[62px] xl:text-[70px] uppercase tracking-[0.15em] text-[#0B0D0E] leading-[0.92] m-0 p-0">
+              <h2 className="font-display text-4xl sm:text-5xl md:text-[56px] lg:text-[62px] xl:text-[70px] uppercase tracking-[0.15em] text-[#0B0D0E] leading-[0.92] m-0 p-0 pb-2">
                 JOIN OUR
               </h2>
 
               {/* Line 2: NEWSLETTER with Crown and Slashes */}
               <div className="relative inline-flex items-center mt-0.5 sm:mt-1">
                 {/* Accent Slash Marks to the left */}
-                <div className="absolute left-5 sm:-left-7 md:-left-8 top-1/2 -translate-y-1/2">
+                <div className="absolute left-5 sm:-left-7 md:-left-8 top-1/2 -translate-y-1/3">
                   <AccentSlashes />
                 </div>
 
@@ -367,8 +367,8 @@ export default function NewsletterCTA() {
             </p>
 
             {/* Decorative Dot Matrix (Bottom Left) */}
-            <div className="mt-4 sm:mt-5 opacity-65">
-              <DotMatrix cols={6} rows={3} dotColor="bg-[#F72585]/45" />
+            <div className="mt-4 sm:mt-5 opacity-55">
+              <DotMatrix cols={6} rows={2} dotColor="bg-[#F72585]/45" />
             </div>
           </div>
 

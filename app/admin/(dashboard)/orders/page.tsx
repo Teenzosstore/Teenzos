@@ -9,19 +9,75 @@ export default async function AdminOrdersPage() {
   const admin = await requireAdmin()
   const supabase = admin.ok ? admin.adminClient : null
 
-  // Fetch all orders with user profile info
+  // Fetch all orders with user profile, delivery address, and order items
   const { data: orders } = supabase
     ? await supabase
         .from('orders')
         .select(`
           *,
           profiles:user_id (
+            id,
             full_name,
-            email
+            email,
+            phone
+          ),
+          addresses:address_id (
+            id,
+            full_name,
+            phone,
+            alternate_phone,
+            address_line_1,
+            address_line_2,
+            city,
+            state,
+            postal_code
+          ),
+          order_items (
+            id,
+            product_id,
+            variant_id,
+            product_name,
+            variant_name,
+            price_at_purchase,
+            quantity,
+            line_total
           )
         `)
         .order('created_at', { ascending: false })
     : { data: [] }
+
+  let enrichedOrders = (orders || []) as any[]
+
+  if (enrichedOrders.length > 0 && supabase) {
+    const productIds = Array.from(
+      new Set(
+        enrichedOrders
+          .flatMap((o: any) => o.order_items || [])
+          .map((item: any) => item.product_id)
+          .filter(Boolean)
+      )
+    )
+
+    if (productIds.length > 0) {
+      const { data: products } = await supabase
+        .from('products')
+        .select('id, featured_image_url')
+        .in('id', productIds)
+
+      const imageMap: Record<string, string> = {}
+      products?.forEach((p: any) => {
+        if (p.featured_image_url) imageMap[p.id] = p.featured_image_url
+      })
+
+      enrichedOrders = enrichedOrders.map((order: any) => ({
+        ...order,
+        order_items: (order.order_items || []).map((item: any) => ({
+          ...item,
+          image_url: (item.product_id && imageMap[item.product_id]) || '',
+        })),
+      }))
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -30,7 +86,7 @@ export default async function AdminOrdersPage() {
         <p className="text-sm text-ink/60 mt-1">Manage and track all store orders.</p>
       </div>
 
-      <OrdersTableManager initialOrders={orders || []} />
+      <OrdersTableManager initialOrders={enrichedOrders} />
     </div>
   )
 }

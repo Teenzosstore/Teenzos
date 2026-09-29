@@ -118,7 +118,7 @@ export default function CartDrawer({ isOpen, onClose, shipping }: CartDrawerProp
                 <div className="w-16 h-16 rounded-full bg-[#FF007A]/10 text-[#FF007A] flex items-center justify-center mb-4">
                   <ShoppingBag className="w-8 h-8" />
                 </div>
-                <h3 className="font-display font-bold uppercase tracking-wider text-xl text-gray-900 mb-1">
+                <h3 className="font-display font-[300] uppercase tracking-wider text-xl text-gray-900 mb-1">
                   YOUR BAG IS EMPTY
                 </h3>
                 <p className="text-gray-500 text-xs sm:text-sm max-w-[260px] mb-6 leading-relaxed">
@@ -221,7 +221,7 @@ export default function CartDrawer({ isOpen, onClose, shipping }: CartDrawerProp
               {/* Subtotal */}
               <div className="flex justify-between items-baseline">
                 <span className="text-xs sm:text-sm font-semibold text-gray-600">Subtotal</span>
-                <span className="font-display font-bold text-2xl text-gray-900 tracking-tight">
+                <span className="font-display font-[350] text-2xl text-gray-900 tracking-tight">
                   ₹{cartTotal.toLocaleString('en-IN')}
                 </span>
               </div>
@@ -246,7 +246,7 @@ export default function CartDrawer({ isOpen, onClose, shipping }: CartDrawerProp
                 <Link
                   href="/checkout"
                   onClick={onClose}
-                  className="w-full text-center py-3.5 sm:py-4 bg-[#0B0D0E] hover:bg-[#FF007A] text-white font-bold text-xs sm:text-sm tracking-wider uppercase rounded-xl shadow-md transition-all duration-200 flex items-center justify-center gap-2 group"
+                  className="w-full text-center py-3.5  bg-[#0B0D0E] hover:bg-[#FF007A] text-white font-bold text-xs sm:text-sm tracking-wider uppercase rounded-xl shadow-md transition-all duration-200 flex items-center justify-center gap-2 group"
                 >
                   <span>PROCEED TO CHECKOUT</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
