@@ -12,6 +12,63 @@ type CartDrawerProps = {
   shipping?: any
 }
 
+function parseItemVariants(variantName?: string) {
+  if (!variantName) return { size: 'Free Size', color: null }
+
+  const trimmed = variantName.trim()
+  if (!trimmed || trimmed.toLowerCase() === 'standard') {
+    return { size: 'Free Size', color: null }
+  }
+
+  const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', 'XXL', '3XL', '4XL', 'FREE SIZE', 'OVERSIZED']
+
+  // Case 1: "L / Black" or "L • Black"
+  if (trimmed.includes(' / ') || trimmed.includes(' • ')) {
+    const parts = trimmed.split(/\s*[\/•]\s*/)
+    const part0Upper = parts[0].trim().toUpperCase()
+    const part1Upper = (parts[1] || '').trim().toUpperCase()
+
+    if (SIZES.includes(part0Upper)) {
+      return { size: part0Upper, color: parts[1]?.trim() || null }
+    }
+    if (SIZES.includes(part1Upper)) {
+      return { size: part1Upper, color: parts[0]?.trim() || null }
+    }
+    return { size: part0Upper, color: parts[1]?.trim() || null }
+  }
+
+  // Case 2: "Black - M" or "Color - Size" or "Size - Color"
+  if (trimmed.includes(' - ')) {
+    const parts = trimmed.split(' - ')
+    const part0Upper = parts[0].trim().toUpperCase()
+    const part1Upper = (parts[1] || '').trim().toUpperCase()
+
+    if (SIZES.includes(part1Upper)) {
+      return { size: part1Upper, color: parts[0].trim() }
+    }
+    if (SIZES.includes(part0Upper)) {
+      return { size: part0Upper, color: parts[1].trim() }
+    }
+    return { size: part1Upper, color: parts[0].trim() }
+  }
+
+  // Case 3: Exactly a size (e.g. "M", "L", "XL")
+  if (SIZES.includes(trimmed.toUpperCase())) {
+    return { size: trimmed.toUpperCase(), color: null }
+  }
+
+  // Case 4: Starts with size (e.g. "L (Black)")
+  const sizeMatch = trimmed.match(/^(XXS|XS|S|M|L|XL|2XL|XXL|3XL|4XL)\b/i)
+  if (sizeMatch) {
+    const s = sizeMatch[1].toUpperCase()
+    const rem = trimmed.replace(sizeMatch[0], '').replace(/[()/-]/g, '').trim()
+    return { size: s, color: rem || null }
+  }
+
+  // Case 5: If it's a color (e.g. "Black", "Acid Wash"), size is Free Size
+  return { size: 'Free Size', color: trimmed }
+}
+
 export default function CartDrawer({ isOpen, onClose, shipping }: CartDrawerProps) {
   const { cart, removeFromCart, updateQuantity, cartTotal, cartCount } = useCart()
 
@@ -138,12 +195,12 @@ export default function CartDrawer({ isOpen, onClose, shipping }: CartDrawerProp
                   className="flex gap-3 sm:gap-3.5 p-3 rounded-xl border border-gray-200/90 bg-white hover:border-gray-300 hover:shadow-xs transition-all"
                 >
                   {/* Product thumbnail */}
-                  <div className="relative w-16 h-20 sm:w-20 sm:h-24 rounded-lg overflow-hidden shrink-0 border border-gray-100 bg-gray-50">
+                  <div className="relative w-18 h-22 sm:w-20 sm:h-24 rounded-xl overflow-hidden shrink-0 border border-gray-200/80 bg-stone-50 shadow-2xs">
                     <Image
                       src={item.image_url}
                       alt={item.name}
                       fill
-                      sizes="80px"
+                      sizes="96px"
                       className="object-cover object-center"
                     />
                   </div>
@@ -152,7 +209,7 @@ export default function CartDrawer({ isOpen, onClose, shipping }: CartDrawerProp
                   <div className="flex-1 flex flex-col justify-between min-w-0 py-0.5">
                     <div>
                       <div className="flex items-start justify-between gap-2">
-                        <h4 className="font-bold text-gray-900 text-xs sm:text-sm leading-snug line-clamp-1">
+                        <h4 className="font-bold text-gray-900 text-xs sm:text-sm leading-snug line-clamp-2">
                           {item.name}
                         </h4>
                         <button
@@ -165,18 +222,28 @@ export default function CartDrawer({ isOpen, onClose, shipping }: CartDrawerProp
                       </div>
 
                       {/* Variant & Category metadata */}
-                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                        {item.variant_name && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-gray-100 text-gray-800">
-                            Size: {item.variant_name}
-                          </span>
-                        )}
-                        {item.category_name && (
-                          <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">
-                            {item.category_name}
-                          </span>
-                        )}
-                      </div>
+                      {(() => {
+                        const { size, color } = parseItemVariants(item.variant_name)
+                        return (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            {size && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-bold uppercase bg-stone-100 text-stone-900 border border-stone-200">
+                                Size : {size}
+                              </span>
+                            )}
+                            {color && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-semibold uppercase bg-stone-100 text-stone-600 border border-stone-200">
+                                {color}
+                              </span>
+                            )}
+                            {item.category_name && (
+                              <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">
+                                {item.category_name}
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </div>
 
                     {/* Bottom Row: Quantity Stepper + Price */}

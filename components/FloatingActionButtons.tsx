@@ -33,8 +33,8 @@ export default function FloatingActionButtons() {
     });
   };
 
-  // Hide on admin portal
-  if (pathname?.startsWith("/admin")) {
+  // Hide on admin portal and checkout page
+  if (pathname?.startsWith("/admin") || pathname === "/checkout") {
     return null;
   }
 

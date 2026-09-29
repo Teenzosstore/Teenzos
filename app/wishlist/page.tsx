@@ -6,12 +6,11 @@ import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import PageHeroBanner from "@/components/PageHeroBanner";
-import { Trash2, ShoppingCart, ArrowRight, Heart, Sparkles } from "lucide-react";
+import { Trash2, ShoppingCart, ArrowRight, Heart } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
 import { SHOP_PRODUCTS, ShopProduct, slugify } from "@/lib/shopProducts";
 import { productLoaderFor } from "@/lib/imagekitImage";
-import TrendingProductCard from "@/components/TrendingProductCard";
 import { createClient } from "@/lib/supabase/client";
 
 export default function WishlistPage() {
@@ -229,50 +228,7 @@ export default function WishlistPage() {
     showToast(`Added ${product.name} to cart!`, "success");
   };
 
-  // Recommended products for "Trending For You" section
-  const recommendedProducts = useMemo(() => {
-    if (dbProducts.length > 0) {
-      return dbProducts.slice(0, 5);
-    }
-    return SHOP_PRODUCTS.slice(0, 5);
-  }, [dbProducts]);
 
-  // Handle wishlist toggle from Trending Product Card
-  const handleToggleWishlistFromCard = (id: string) => {
-    const isCurrentlyLiked = !!wishlistMap[id];
-    const nextVal = !isCurrentlyLiked;
-    const next = { ...wishlistMap };
-    if (nextVal) {
-      next[id] = true;
-    } else {
-      delete next[id];
-    }
-    setWishlistMap(next);
-
-    try {
-      localStorage.setItem("teenzos_wishlist", JSON.stringify(next));
-
-      const found = recommendedProducts.find((p) => p.id === id) || dbProducts.find((p) => p.id === id);
-      const nextCached = { ...cachedProductsMap };
-      if (nextVal && found) {
-        nextCached[id] = found;
-      } else if (!nextVal) {
-        delete nextCached[id];
-      }
-      setCachedProductsMap(nextCached);
-      localStorage.setItem("teenzos_wishlist_products", JSON.stringify(nextCached));
-
-      window.dispatchEvent(new Event("teenzos-wishlist-change"));
-    } catch (err) {
-      console.error(err);
-    }
-
-    if (nextVal) {
-      showToast("Saved to wishlist!", "success");
-    } else {
-      showToast("Removed from wishlist", "info");
-    }
-  };
 
   return (
     <>
@@ -451,40 +407,7 @@ export default function WishlistPage() {
             </div>
           )}
 
-          {/* ── Trending For You Drops Section ── */}
-          {recommendedProducts.length > 0 && (
-            <div className="mt-14 pt-10 border-t border-stone-200">
-              <div className="flex items-center justify-between mb-5 sm:mb-6">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-[#F72585]" />
-                  <h3 className="font-display font-[350] text-xl sm:text-2xl text-[#0B0D0E] uppercase tracking-tight">
-                    TRENDING FOR YOU
-                  </h3>
-                </div>
-                <Link
-                  href="/shop"
-                  className="group inline-flex items-center gap-1.5 font-body font-bold text-xs sm:text-sm text-[#0B0D0E] hover:text-[#F72585] transition-colors"
-                >
-                  <span>View All</span>
-                  <span className="transform group-hover:translate-x-1 transition-transform duration-200 text-sm leading-none">
-                    →
-                  </span>
-                </Link>
-              </div>
 
-              {/* Same responsive grid as Home Page: 2 cols on mobile, 3 cols on tablet, 5 cols on desktop */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
-                {recommendedProducts.map((product) => (
-                  <TrendingProductCard
-                    key={product.id}
-                    product={product}
-                    isLiked={!!wishlistMap[product.id]}
-                    onToggleWishlist={handleToggleWishlistFromCard}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </main>
 
