@@ -25,7 +25,17 @@ type RecentOrder = {
   total_amount: number | string | null
   order_status: string | null
   payment_status: string | null
+  payment_method: string | null
   created_at: string | null
+}
+
+// A customer who abandons the Razorpay modal leaves an unpaid order behind
+// (see cancelPendingRazorpayOrder in actions/checkout.ts) — it shouldn't
+// count toward orders/revenue stats or show in "Recent Orders". COD orders
+// have no "paid" concept, so they always count.
+function isVisibleOrder(order: { payment_method: string | null; payment_status: string | null }) {
+  if (order.payment_method === 'COD' || order.payment_method === 'Cash on Delivery') return true
+  return order.payment_status === 'paid'
 }
 
 type AdminStats = {
@@ -75,7 +85,7 @@ async function getStats(): Promise<AdminStats> {
       await Promise.all([
         supabase
           .from('orders')
-          .select('id, total_amount', { count: 'exact', head: false }),
+          .select('id, total_amount, payment_status, payment_method'),
         supabase
           .from('profiles')
           .select('id', { count: 'exact', head: true })
@@ -85,9 +95,9 @@ async function getStats(): Promise<AdminStats> {
           .select('id', { count: 'exact', head: true }),
         supabase
           .from('orders')
-          .select('id, order_number, total_amount, order_status, payment_status, created_at')
+          .select('id, order_number, total_amount, order_status, payment_status, payment_method, created_at')
           .order('created_at', { ascending: false })
-          .limit(6),
+          .limit(20),
       ])
 
     const queryErrors = [
@@ -109,15 +119,15 @@ async function getStats(): Promise<AdminStats> {
       return emptyStats(true, errorMsg)
     }
 
-    const totalOrders = ordersRes.count || 0
-    const totalRevenue =
-      ordersRes.data?.reduce(
-        (sum, order) => sum + (Number(order.total_amount) || 0),
-        0
-      ) || 0
+    const visibleOrdersData = (ordersRes.data || []).filter(isVisibleOrder)
+    const totalOrders = visibleOrdersData.length
+    const totalRevenue = visibleOrdersData.reduce(
+      (sum, order) => sum + (Number(order.total_amount) || 0),
+      0
+    )
     const totalCustomers = customersRes.count || 0
     const totalProducts = productsRes.count || 0
-    const recentOrders = recentOrdersRes.data || []
+    const recentOrders = (recentOrdersRes.data || []).filter(isVisibleOrder).slice(0, 6)
 
     return { totalOrders, totalRevenue, totalCustomers, totalProducts, recentOrders, loadError: false }
   } catch (error: any) {

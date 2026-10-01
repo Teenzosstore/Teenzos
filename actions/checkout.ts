@@ -7,6 +7,7 @@ import crypto from 'crypto'
 import { trySendOrderConfirmationEmail } from '@/lib/orderConfirmationEmail'
 import {
   createRazorpayOrder,
+  fetchRazorpayOrder,
   getRazorpayKeyId,
   isRazorpayEnabled,
   verifyRazorpayPaymentSignature,
@@ -564,4 +565,67 @@ export async function verifyRazorpayPayment(
   revalidatePath('/profile')
   revalidatePath('/admin/orders')
   return { success: true, orderNumber: result.orderNumber }
+}
+
+// Called when the customer dismisses the Razorpay modal without paying.
+// createOrder() inserts the order row before the modal opens (Razorpay needs
+// a receipt/order_id up front), so a cancelled payment would otherwise leave
+// a permanent "pending" order cluttering the admin dashboard.
+export async function cancelPendingRazorpayOrder(orderId: string, razorpayOrderId?: string) {
+  if (!orderId) return
+  try {
+    const userSupabase = await createClient()
+    const { data: { user } } = await userSupabase.auth.getUser()
+    if (!user) return
+
+    const adminSupabase = createAdminClient()
+    const { data: order } = await adminSupabase
+      .from('orders')
+      .select('id, payment_status, razorpay_order_id')
+      .eq('id', orderId)
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    // Already resolved (paid, or cancelled by an earlier call) — nothing to do.
+    if (!order || order.payment_status !== 'pending') return
+
+    // Razorpay's modal `ondismiss` only means "the modal closed" — for a UPI
+    // intent payment it fires the moment the browser switches to the UPI
+    // app, well before we know whether the payment actually went through.
+    // Don't guess from our own DB timing; ask Razorpay directly, since its
+    // order status is the source of truth on whether money actually moved.
+    // `orders.razorpay_order_id` isn't written to the DB until payment is
+    // verified, so at this point it's normally still null — take it from the
+    // caller (the browser has it from the moment the Razorpay order was
+    // created) and fall back to the DB value in case it's already been
+    // backfilled.
+    const rzpOrderId = razorpayOrderId || order.razorpay_order_id
+    if (rzpOrderId) {
+      const rzpOrder = await fetchRazorpayOrder(rzpOrderId)
+      if (rzpOrder?.status === 'paid') {
+        // Payment succeeded after all — leave it alone. The webhook (or
+        // verifyRazorpayPayment) will mark it paid, if it hasn't already.
+        return
+      }
+      if (!rzpOrder) {
+        // Couldn't reach Razorpay to confirm — safer to leave the order as
+        // pending than to risk cancelling a payment that actually succeeded.
+        return
+      }
+    }
+
+    // Never delete the order or its items — mark it cancelled instead, so a
+    // mistaken or premature cancel can never destroy data. The admin order
+    // list already hides non-paid, non-COD orders, so this stays invisible
+    // clutter unless someone deliberately looks for it.
+    await adminSupabase
+      .from('orders')
+      .update({ order_status: 'cancelled', cancelled_at: new Date().toISOString() })
+      .eq('id', orderId)
+      .eq('payment_status', 'pending')
+
+    revalidatePath('/admin/orders')
+  } catch (e) {
+    console.warn('Failed to cancel pending order:', e)
+  }
 }

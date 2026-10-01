@@ -53,6 +53,23 @@ export async function createRazorpayOrder(input: {
   return payload as RazorpayOrder
 }
 
+// Fetches an order's own status straight from Razorpay — used to confirm
+// whether money actually moved before cancelling a locally-pending order
+// (see cancelPendingRazorpayOrder in actions/checkout.ts).
+export async function fetchRazorpayOrder(orderId: string): Promise<RazorpayOrder | null> {
+  const keyId = process.env.RAZORPAY_KEY_ID
+  const keySecret = process.env.RAZORPAY_KEY_SECRET
+  if (!keyId || !keySecret) return null
+
+  const response = await fetch(`https://api.razorpay.com/v1/orders/${encodeURIComponent(orderId)}`, {
+    headers: { Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}` },
+  })
+  if (!response.ok) return null
+
+  const payload = await response.json().catch(() => null)
+  return payload?.id ? (payload as RazorpayOrder) : null
+}
+
 function safeEqualHex(a: string, b: string) {
   const bufferA = Buffer.from(a.toLowerCase(), 'utf8')
   const bufferB = Buffer.from(b.toLowerCase(), 'utf8')

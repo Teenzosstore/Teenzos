@@ -4,7 +4,7 @@ import React, { useState, useEffect, useTransition } from 'react'
 import { useCart } from '@/context/CartContext'
 import { useToast } from '@/context/ToastContext'
 import { validateCoupon } from '@/actions/admin/coupons'
-import { calculateCheckoutTotals, processCheckout, verifyRazorpayPayment } from '@/actions/checkout'
+import { calculateCheckoutTotals, cancelPendingRazorpayOrder, processCheckout, verifyRazorpayPayment } from '@/actions/checkout'
 import { getCurrentCustomerProfileForClient, sendEmailOtp, verifyEmailOtp } from '@/actions/auth'
 import { SITE } from '@/lib/data'
 import {
@@ -350,6 +350,7 @@ export default function CheckoutForm({
   const openRazorpay = (res: {
     razorpay: { keyId: string; orderId: string; amount: number; currency: string; name: string; email: string; contact: string }
     order_number: string
+    orderId: string
   }) => {
     const Razorpay = (window as any).Razorpay
     if (!Razorpay) {
@@ -373,6 +374,12 @@ export default function CheckoutForm({
       modal: {
         ondismiss: () => {
           showToast('Payment cancelled. You can try again whenever you are ready.', 'info')
+          // The pending order was created before the modal opened (Razorpay
+          // needs a receipt up front) — clean it up so it doesn't sit in the
+          // admin dashboard as an abandoned order. The server independently
+          // confirms with Razorpay that nothing was actually paid before
+          // touching anything.
+          cancelPendingRazorpayOrder(res.orderId, res.razorpay.orderId).catch(() => {})
         },
       },
       handler: async (response: any) => {

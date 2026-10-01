@@ -47,7 +47,17 @@ export default async function AdminOrdersPage() {
         .order('created_at', { ascending: false })
     : { data: [] }
 
-  let enrichedOrders = (orders || []) as any[]
+  // Hide unpaid Razorpay orders — a customer who abandons the payment modal
+  // leaves one of these behind (see cancelPendingRazorpayOrder in
+  // actions/checkout.ts), and it should stay invisible clutter rather than
+  // show up as a real order. COD orders have no "paid" concept, so they
+  // always show.
+  const visibleOrders = ((orders || []) as any[]).filter((order) => {
+    if (order.payment_method === 'COD' || order.payment_method === 'Cash on Delivery') return true
+    return order.payment_status === 'paid'
+  })
+
+  let enrichedOrders = visibleOrders
 
   if (enrichedOrders.length > 0 && supabase) {
     const productIds = Array.from(
