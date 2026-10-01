@@ -116,6 +116,7 @@ export async function sendCampaignToSubscribers(payload: CampaignPayload): Promi
 
     let sentCount = 0
     let failedCount = 0
+    let lastErrorMessage: string | null = null
 
     // Send in concurrent batches of 5 to avoid rate-limiting Brevo while keeping it fast
     const emails = subscribers.map((s) => s.email).filter(Boolean)
@@ -137,12 +138,22 @@ export async function sendCampaignToSubscribers(payload: CampaignPayload): Promi
               offerCode: payload.offerCode?.trim() || undefined,
             })
             sentCount++
-          } catch (sendErr) {
+          } catch (sendErr: any) {
             console.error(`Failed to send campaign email to ${email}:`, sendErr)
+            lastErrorMessage = sendErr?.message || String(sendErr)
             failedCount++
           }
         })
       )
+    }
+
+    if (sentCount === 0 && failedCount > 0) {
+      return {
+        success: false,
+        sentCount,
+        failedCount,
+        error: `Failed to send to all ${failedCount} subscriber${failedCount === 1 ? '' : 's'}: ${lastErrorMessage || 'unknown error'}`,
+      }
     }
 
     return {
