@@ -423,7 +423,7 @@ export default function CustomerAccountView({
     const total = orders.length
     const inTransit = orders.filter((o) => {
       const s = (o.order_status || '').toLowerCase()
-      return s === 'shipped' || s === 'in transit' || s === 'in_transit' || s === 'processing' || s === 'out for delivery' || s === 'out_for_delivery'
+      return s === 'shipped' || s === 'in transit' || s === 'in_transit' || s === 'out for delivery' || s === 'out_for_delivery'
     }).length
     const delivered = orders.filter((o) => (o.order_status || '').toLowerCase() === 'delivered').length
 
@@ -519,7 +519,7 @@ export default function CustomerAccountView({
       phone: editProfileForm.phone,
     }))
     setIsEditProfileOpen(false)
-    showToast('Profile updated in Supabase successfully!', 'success')
+    showToast('Profile updated successfully!', 'success')
   }
 
   // Handle Change Password in Supabase
@@ -613,7 +613,7 @@ export default function CustomerAccountView({
     }
 
     setIsAddressModalOpen(false)
-    showToast('Address saved in Supabase successfully!', 'success')
+    showToast('Address saved successfully!', 'success')
   }
 
   // Handle Delete Address in Supabase
@@ -908,12 +908,6 @@ export default function CustomerAccountView({
                         const firstItem = order.order_items?.[0]
                         const status = order.order_status?.toLowerCase() || 'pending'
                         const isItemDelivered = status === 'delivered'
-                        const isItemInTransit =
-                          status === 'shipped' ||
-                          status === 'in transit' ||
-                          status === 'in_transit' ||
-                          status === 'processing' ||
-                          status === 'out for delivery'
 
                         const itemThumb = firstItem?.image_url || ''
 
@@ -1021,7 +1015,7 @@ export default function CustomerAccountView({
                         </div>
                         <h3 className="text-sm font-bold text-gray-900">No Orders Placed Yet</h3>
                         <p className="text-xs text-gray-400 max-w-sm mx-auto">
-                          Your live orders from Supabase will appear here once you place a checkout.
+                          Your orders will appear here once you place a checkout.
                         </p>
                         <Link
                           href="/shop"
@@ -1365,7 +1359,7 @@ export default function CustomerAccountView({
                   <div>
                     <h2 className="text-xl font-bold text-gray-900 tracking-tight">Saved Addresses</h2>
                     <p className="text-xs text-gray-400 mt-1">
-                      Manage delivery locations for quick 1-click checkout. Saved in Supabase.
+                      Manage delivery locations for quick 1-click checkout.
                     </p>
                   </div>
                   <button
@@ -1508,7 +1502,7 @@ export default function CustomerAccountView({
                   <div className="p-4 rounded-2xl border border-gray-100 space-y-2">
                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Account Email</span>
                     <p className="text-sm font-bold text-gray-900">{profile.email || 'user@example.com'}</p>
-                    <p className="text-[11px] text-gray-400">Supabase authenticated account</p>
+                    <p className="text-[11px] text-gray-400">Verified account</p>
                   </div>
 
                   <button
@@ -1526,7 +1520,7 @@ export default function CustomerAccountView({
                     onClick={() => setIsChangePasswordOpen(true)}
                     className="w-full py-3 px-4 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-2xl text-xs font-bold text-gray-800 text-left flex items-center justify-between transition-colors"
                   >
-                    <span>Change Account Password in Supabase</span>
+                    <span>Change Account Password</span>
                     <ChevronRight className="w-4 h-4 text-gray-400" />
                   </button>
                 </div>
@@ -1616,7 +1610,7 @@ export default function CustomerAccountView({
                   disabled={isSaving}
                   className="flex-1 py-2.5 bg-pink hover:bg-[#d91668] text-white rounded-[5px] text-xs font-bold shadow-pink transition-all flex items-center justify-center gap-1.5"
                 >
-                  {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Save in Supabase'}
+                  {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Save Changes'}
                 </button>
               </div>
             </form>

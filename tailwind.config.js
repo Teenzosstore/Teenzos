@@ -53,6 +53,14 @@ module.exports = {
         border: "#DCDCDC",
         borderDark: "#292D2F",
 
+        // Admin dashboard surfaces (cards / inputs / dividers)
+        panel: "#FFFFFF",
+        cream: {
+          DEFAULT: "#F7F7F5",
+          deep: "#F1F1EF",
+          line: "#DCDCDC",
+        },
+
         // Text
         ink: "#111315",
         muted: "#6B7073",

@@ -3,11 +3,14 @@ import { CheckCircle2, XCircle } from 'lucide-react'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import ClearCartOnSuccess from './_components/ClearCartOnSuccess'
 
 export const metadata = {
   title: 'Order Status | Teenzosstore',
 }
+
+export const dynamic = 'force-dynamic'
 
 export default async function CheckoutCompletePage({
   searchParams,
@@ -27,6 +30,26 @@ export default async function CheckoutCompletePage({
       .eq('user_id', user.id)
       .maybeSingle()
     order = data
+  }
+
+  // The session cookie can lag by a request right after the browser verifies
+  // a Razorpay payment and redirects here (fresh login/OTP sessions, or a
+  // cookie that hasn't round-tripped yet) — don't show a just-paid order as
+  // failed just because this one request couldn't read the session. Fall
+  // back to a direct, just-paid lookup, scoped tightly by time so an old or
+  // guessed order number can't be used to pull up someone else's order.
+  if (!order && orderNumber) {
+    const admin = createAdminClient()
+    const { data } = await admin
+      .from('orders')
+      .select('order_number, payment_status, total_amount, razorpay_payment_id, paid_at')
+      .eq('order_number', orderNumber)
+      .eq('payment_status', 'paid')
+      .maybeSingle()
+
+    if (data?.paid_at && Date.now() - new Date(data.paid_at).getTime() < 30 * 60 * 1000) {
+      order = data
+    }
   }
 
   const isPaid = order?.payment_status === 'paid'

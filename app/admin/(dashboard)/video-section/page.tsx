@@ -21,7 +21,7 @@ export default async function AdminVideoSectionPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-ink">Video Section</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-ink">Video Section</h1>
         <p className="text-sm text-ink/60 mt-1">
           Shoppable videos on the homepage — each video is mapped to a product, so shoppers can watch and tap straight
           through to buy.

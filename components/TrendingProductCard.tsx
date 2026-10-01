@@ -365,24 +365,23 @@ export default function TrendingProductCard({
       <div
         className={
           isLarge
-            ? "relative w-full min-h-[240px] rounded-2xl bg-[#F1F1EF] overflow-hidden mb-3"
+            ? "relative aspect-[4/5] w-full rounded-2xl bg-[#F1F1EF] overflow-hidden mb-3"
             : "relative aspect-[4/5] w-full rounded-[5px] bg-[#F7F7F5] border border-stone-200/60 overflow-hidden mb-2.5 sm:mb-3 flex items-center justify-center"
         }
       >
-        <Link href={productHref} className={isLarge ? "block w-full" : "block relative w-full h-full"}>
+        <Link href={productHref} className="block relative w-full h-full">
           {isLarge ? (
-            // Natural aspect ratio: the whole photo is always visible (never
-            // cropped) and fills the full card width with no empty bands.
+            // Fixed aspect ratio + object-cover: every card in the grid gets
+            // the same height regardless of each photo's native dimensions,
+            // with no empty band below shorter photos.
             <Image
               key={activeImage}
               src={activeImage}
               alt={`${product.name} - ${resolvedColors[selectedColorIdx]?.name || ""}`}
-              width={0}
-              height={0}
+              fill
               loader={productLoaderFor(activeImage)}
               sizes="(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 25vw"
-              style={{ width: "100%", height: "auto" }}
-              className="block transform group-hover:scale-105 transition-all duration-300 ease-out"
+              className="object-cover object-center transform group-hover:scale-105 transition-all duration-300 ease-out"
               onError={(e) => {
                 e.currentTarget.src = "/image.png";
               }}
