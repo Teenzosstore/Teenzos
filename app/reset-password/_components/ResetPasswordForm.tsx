@@ -5,13 +5,6 @@ import Link from 'next/link'
 import { resetPasswordWithToken } from '@/actions/auth'
 import { Lock, Eye, EyeOff, Loader2, CheckCircle2, AlertCircle, KeyRound } from 'lucide-react'
 
-function getSafeRedirectPath(redirectTo: string | undefined): string {
-  if (!redirectTo || !redirectTo.startsWith('/') || redirectTo.startsWith('//')) {
-    return '/profile'
-  }
-  return redirectTo
-}
-
 export default function ResetPasswordForm({ token }: { token: string }) {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -44,9 +37,8 @@ export default function ResetPasswordForm({ token }: { token: string }) {
 
       setSuccess(true)
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new Event('rawflex-login-status-change'))
         setTimeout(() => {
-          window.location.assign(getSafeRedirectPath('/profile'))
+          window.location.assign('/login?reset=success')
         }, 1500)
       }
     } catch (err: any) {
@@ -82,7 +74,7 @@ export default function ResetPasswordForm({ token }: { token: string }) {
           <CheckCircle2 className="w-6 h-6" />
         </div>
         <h1 className="text-xl font-bold text-[#0B0D0E] mb-1.5">Password Reset!</h1>
-        <p className="text-sm text-gray-500">Redirecting you to your account...</p>
+        <p className="text-sm text-gray-500">Redirecting you to the login page...</p>
       </div>
     )
   }

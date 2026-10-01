@@ -11,9 +11,11 @@ export const metadata = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ redirect?: string; error?: string }>
+  searchParams: Promise<{ redirect?: string; error?: string; reset?: string }>
 }) {
-  const { redirect, error } = await searchParams
+  const { redirect, error, reset } = await searchParams
+  const initialSuccess =
+    reset === 'success' ? 'Password reset successful! Please log in with your new password.' : undefined
 
   return (
     <>
@@ -34,7 +36,7 @@ export default async function LoginPage({
 
         {/* Centered Auth Card Container with compact vertical padding (py kam hi rakha hai) */}
         <div className="relative z-10 w-full max-w-[460px] mx-auto px-4 py-4 sm:py-6 md:py-8 flex items-center justify-center">
-          <AuthForm redirectTo={redirect} initialError={error} />
+          <AuthForm redirectTo={redirect} initialError={error} initialSuccess={initialSuccess} />
         </div>
       </main>
       <Footer />

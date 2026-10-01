@@ -37,9 +37,11 @@ function getSafeRedirectPath(redirectTo: string | undefined): string {
 export default function AuthForm({
   redirectTo,
   initialError,
+  initialSuccess,
 }: {
   redirectTo?: string
   initialError?: string
+  initialSuccess?: string
 }) {
   // Tab state
   const [tab, setTab] = useState<TabMode>('LOGIN')
@@ -64,7 +66,7 @@ export default function AuthForm({
   // Feedback states
   const [isBusy, setIsBusy] = useState(false)
   const [error, setError] = useState(initialError || '')
-  const [success, setSuccess] = useState('')
+  const [success, setSuccess] = useState(initialSuccess || '')
 
   // Resend countdown timer
   useEffect(() => {

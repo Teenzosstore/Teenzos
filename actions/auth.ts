@@ -535,13 +535,7 @@ export async function resetPasswordWithToken(
     return { error: updateError.message || 'Failed to reset password. Please try again.' }
   }
 
-  await setRawflexSessionCookie({
-    id: userId,
-    email: trimmedEmail,
-    full_name: profile?.full_name || record.full_name || 'Customer',
-    role: profile?.role || 'customer',
-  })
-
+  // No auto-login here — send them to /login to sign in with the new password.
   revalidatePath('/', 'layout')
   return { success: true }
 }
