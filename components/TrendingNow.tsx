@@ -277,8 +277,8 @@ export default function TrendingNow({ initialProducts = [] }: TrendingNowProps) 
           </div>
         </div>
 
-        {/* ── Products Grid: 2 columns on mobile, 3 on tablet, 4 large cards on desktop ── */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-7 sm:gap-x-4 sm:gap-y-9 lg:gap-x-6 lg:gap-y-11">
+        {/* ── Products Grid: 2 columns on mobile, 3 on tablet/laptop, 4 on wide desktop — fewer columns means bigger cards; aspect-ratio keeps the image box proportional at any size ── */}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-3 gap-y-7 sm:gap-x-4 sm:gap-y-9 lg:gap-x-6 lg:gap-y-11">
           {visibleProducts.map((product) => (
             <TrendingProductCard
               key={product.id}

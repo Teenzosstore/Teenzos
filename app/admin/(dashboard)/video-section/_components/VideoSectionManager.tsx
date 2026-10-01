@@ -475,7 +475,7 @@ export function VideoSectionManager({
         </div>
 
         <p className="text-sm text-ink/50">
-          MP4 / WebM / MOV — up to 100 MB. Short vertical clips (9:16) work best.
+          MP4 / WebM / MOV — max <span className="font-bold text-ink">50 MB</span> per video. Short vertical clips (9:16) work best.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

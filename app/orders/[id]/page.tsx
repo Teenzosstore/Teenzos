@@ -341,12 +341,6 @@ export default async function CustomerOrderPage({ params }: { params: Promise<{ 
                       <p className="font-mono font-bold text-gray-900 text-sm mt-0.5 select-all">{awb}</p>
                     </div>
                   )}
-                  {order.courier_name && (
-                    <div className="flex-1 min-w-[140px] bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Courier</p>
-                      <p className="font-bold text-gray-900 text-sm mt-0.5">{order.courier_name}</p>
-                    </div>
-                  )}
                 </div>
 
                 {trackUrl && (
@@ -357,7 +351,7 @@ export default async function CustomerOrderPage({ params }: { params: Promise<{ 
                     className="mt-4 w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-black hover:bg-pink text-white text-xs font-bold uppercase tracking-wide transition-colors"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                    Track on courier site
+                    Track on Shiprocket
                   </a>
                 )}
 

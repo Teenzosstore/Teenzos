@@ -278,12 +278,9 @@ export default function ProfileManager({ adminProfile, orders = [] }: { adminPro
                   </div>
                 )}
 
-                {(order.courier_name || order.tracking_number || order.tracking_url || order.shipment_notes) && (
+                {(order.tracking_number || order.tracking_url || order.shipment_notes) && (
                   <div className="border-t border-cream-line pt-3 text-sm text-ink/70 space-y-2">
                     <div className="flex flex-wrap gap-x-5 gap-y-1">
-                      {order.courier_name && (
-                        <span><strong className="text-ink">Courier:</strong> {order.courier_name}</span>
-                      )}
                       {order.tracking_number && (
                         <span><strong className="text-ink">Tracking:</strong> {order.tracking_number}</span>
                       )}

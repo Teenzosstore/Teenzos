@@ -9,7 +9,7 @@ export type VideoUploadResult = {
 }
 
 const ALLOWED_EXTENSIONS = ['mp4', 'webm', 'mov']
-const MAX_VIDEO_MB = 100
+const MAX_VIDEO_MB = 50
 
 // Uploads a video straight from the browser to ImageKit using a short-lived
 // signature from /api/imagekit/auth. Going direct (not through our server)

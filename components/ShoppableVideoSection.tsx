@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ExternalLink, Instagram, Link2, Package, Volume2, VolumeX, Youtube } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, Instagram, Link2, Package, Volume2, VolumeX, Youtube } from "lucide-react";
 import type { HomeShoppableVideo } from "@/lib/shoppableVideos";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -50,7 +50,7 @@ function UploadedVideoCard({ item }: { item: HomeShoppableVideo }) {
   };
 
   return (
-    <div className="snap-center shrink-0 w-[calc(100vw-2rem)] max-w-[300px] sm:w-[260px] lg:w-[280px] flex flex-col gap-3">
+    <div className="snap-center shrink-0 w-[calc(100vw-2rem)] max-w-[340px] sm:w-[300px] lg:w-[320px] flex flex-col gap-3">
       {/* Video */}
       <div className="relative aspect-[9/16] rounded-2xl overflow-hidden bg-neutral-100 shadow-sm border border-neutral-200">
         <video
@@ -101,7 +101,7 @@ function ExternalLinkCard({ item }: { item: HomeShoppableVideo }) {
   }[platform];
 
   return (
-    <div className="snap-center shrink-0 w-[calc(100vw-2rem)] max-w-[300px] sm:w-[260px] lg:w-[280px] flex flex-col gap-3">
+    <div className="snap-center shrink-0 w-[calc(100vw-2rem)] max-w-[340px] sm:w-[300px] lg:w-[320px] flex flex-col gap-3">
       <a
         href={url}
         target="_blank"
@@ -176,6 +176,37 @@ export default function ShoppableVideoSection({
   subtitle?: string;
   instagramUrl?: string;
 }) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateScrollState = () => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+
+  useEffect(() => {
+    updateScrollState();
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", updateScrollState, { passive: true });
+    window.addEventListener("resize", updateScrollState);
+    return () => {
+      el.removeEventListener("scroll", updateScrollState);
+      window.removeEventListener("resize", updateScrollState);
+    };
+  }, [videos.length]);
+
+  const scrollByCard = (direction: "left" | "right") => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const card = el.querySelector<HTMLElement>(":scope > *");
+    const amount = (card?.offsetWidth || 280) + 20;
+    el.scrollBy({ left: direction === "left" ? -amount : amount, behavior: "smooth" });
+  };
+
   if (!videos || videos.length === 0) return null;
 
   return (
@@ -199,17 +230,42 @@ export default function ShoppableVideoSection({
           </div>
         )}
 
-        {/* Video scroll row — mobile: one card full-width centered; sm+: multi-card row */}
-        <div
-          className="flex gap-4 sm:gap-5 overflow-x-auto snap-x snap-mandatory pb-4 -mx-4 px-4 sm:mx-0 sm:px-0 sm:[&>:first-child]:ml-auto sm:[&>:last-child]:mr-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          style={{ scrollPaddingInline: '1rem' }}
-        >
-          {videos.map((item) =>
-            item.external_url ? (
-              <ExternalLinkCard key={item.id} item={item} />
-            ) : (
-              <UploadedVideoCard key={item.id} item={item} />
-            )
+        {/* Video scroll row — mobile: one card full-width centered + touch swipe; sm+: multi-card row + arrow buttons */}
+        <div className="relative">
+          <div
+            ref={scrollerRef}
+            className="flex gap-4 sm:gap-5 overflow-x-auto snap-x snap-mandatory pb-4 -mx-4 px-4 sm:mx-0 sm:px-0 sm:[&>:first-child]:ml-auto sm:[&>:last-child]:mr-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            style={{ scrollPaddingInline: '1rem' }}
+          >
+            {videos.map((item) =>
+              item.external_url ? (
+                <ExternalLinkCard key={item.id} item={item} />
+              ) : (
+                <UploadedVideoCard key={item.id} item={item} />
+              )
+            )}
+          </div>
+
+          {/* Prev/Next arrows — desktop/tablet only (mobile already has touch swipe) */}
+          {canScrollLeft && (
+            <button
+              type="button"
+              onClick={() => scrollByCard("left")}
+              aria-label="Previous video"
+              className="hidden sm:flex absolute left-0 top-[calc(50%-14px)] -translate-y-1/2 w-10 h-10 rounded-full bg-white border border-neutral-200 shadow-md items-center justify-center text-ink hover:bg-ink hover:text-white hover:border-ink transition-colors z-10"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+          )}
+          {canScrollRight && (
+            <button
+              type="button"
+              onClick={() => scrollByCard("right")}
+              aria-label="Next video"
+              className="hidden sm:flex absolute right-0 top-[calc(50%-14px)] -translate-y-1/2 w-10 h-10 rounded-full bg-white border border-neutral-200 shadow-md items-center justify-center text-ink hover:bg-ink hover:text-white hover:border-ink transition-colors z-10"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
           )}
         </div>
 

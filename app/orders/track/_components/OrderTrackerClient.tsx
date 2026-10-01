@@ -439,7 +439,7 @@ export default function OrderTrackerClient({
                       className="mt-4 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-black hover:bg-pink text-white text-xs font-bold uppercase tracking-wide transition-colors"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
-                      Track on courier site
+                      Track on Shiprocket
                     </a>
                   )}
 

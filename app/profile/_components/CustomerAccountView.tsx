@@ -1256,12 +1256,11 @@ export default function CustomerAccountView({
                           </div>
                         )}
 
-                        {/* Courier & Tracking info */}
-                        {(order.courier_name || order.tracking_number) && (
+                        {/* Tracking info */}
+                        {order.tracking_number && (
                           <div className="pt-3 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500 bg-gray-50/50 p-3 rounded-[5px]">
                             <div>
-                              {order.courier_name && <span>Courier: <strong className="text-gray-800">{order.courier_name}</strong> | </span>}
-                              {order.tracking_number && <span>Tracking: <strong className="text-gray-800">{order.tracking_number}</strong></span>}
+                              <span>Tracking: <strong className="text-gray-800">{order.tracking_number}</strong></span>
                             </div>
                             <Link
                               href={`/orders/${order.id}`}
@@ -1924,18 +1923,15 @@ export default function CustomerAccountView({
               </div>
             </div>
 
-            {/* Courier & Tracking Details if present */}
-            {(selectedProductItem.order.courier_name || selectedProductItem.order.tracking_number) && (
+            {/* Tracking Details if present */}
+            {selectedProductItem.order.tracking_number && (
               <div className="p-3 rounded-[5px] bg-cyan-50/60 border border-cyan-100 text-xs space-y-1">
                 <div className="flex items-center gap-1.5 text-cyan-800 font-bold text-[11px]">
                   <Truck className="w-3.5 h-3.5 text-[#36B8C5]" />
-                  <span>Shipment & Courier Information</span>
+                  <span>Shipment Information</span>
                 </div>
                 <div className="flex items-center justify-between text-gray-700 text-[11px] pt-1">
-                  <span>Courier: <strong className="text-gray-900">{selectedProductItem.order.courier_name || 'Bluedart / Delhivery'}</strong></span>
-                  {selectedProductItem.order.tracking_number && (
-                    <span>AWB: <strong className="text-gray-900 font-mono">{selectedProductItem.order.tracking_number}</strong></span>
-                  )}
+                  <span>AWB: <strong className="text-gray-900 font-mono">{selectedProductItem.order.tracking_number}</strong></span>
                 </div>
               </div>
             )}
