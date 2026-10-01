@@ -6,7 +6,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { cookies } from 'next/headers'
 import { createSignedRawflexSession, rawflexSessionCookieNames, type RawflexSession } from '@/lib/auth/session'
-import { sendTransactionalEmail, sendOtpEmail, sendWelcomeEmail } from '@/lib/email'
+import { sendTransactionalEmail, sendOtpEmail, sendWelcomeEmail, sendPasswordResetEmail } from '@/lib/email'
 
 export type AuthResult = {
   error?: string
@@ -393,19 +393,156 @@ export async function registerWithCredentials(
   return { success: true }
 }
 
+// Sends a password reset LINK via Brevo (not Supabase's own email sender).
+// The link carries a one-time token stored in email_otps (reusing that table's
+// email/otp/expires_at columns — "otp" just holds a long random token here
+// instead of a 6-digit code). /reset-password reads the token and calls
+// resetPasswordWithToken below.
 export async function sendPasswordReset(email: string): Promise<AuthResult> {
-  const supabase = await createClient()
+  const adminSupabase = createAdminClient()
   const trimmedEmail = email.trim().toLowerCase()
 
   if (!trimmedEmail || !trimmedEmail.includes('@')) {
     return { error: 'Please enter a valid email address.' }
   }
 
-  const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail)
-  if (error) {
-    return { error: error.message }
+  // Don't reveal whether an account exists — look it up, but always report success.
+  const { data: profile } = await adminSupabase
+    .from('profiles')
+    .select('id, full_name')
+    .ilike('email', trimmedEmail)
+    .maybeSingle()
+
+  let userExists = !!profile
+  let fullName: string | null = profile?.full_name || null
+  if (!userExists) {
+    try {
+      const { data: userList } = await adminSupabase.auth.admin.listUsers()
+      const match = (userList?.users as any[])?.find((u: any) => u.email?.toLowerCase() === trimmedEmail)
+      if (match) {
+        userExists = true
+        fullName = (match.user_metadata?.full_name as string) || null
+      }
+    } catch (e) {}
   }
 
+  if (!userExists) {
+    // Same response as the success path — avoids leaking which emails are registered.
+    return { success: true }
+  }
+
+  const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '')
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString()
+
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  await adminSupabase.from('email_otps').delete().lt('created_at', twentyFourHoursAgo)
+
+  const { error: dbError } = await adminSupabase
+    .from('email_otps')
+    .insert({
+      email: trimmedEmail,
+      otp: token,
+      full_name: fullName,
+      expires_at: expiresAt,
+    })
+
+  if (dbError) {
+    console.error('Password reset token save error:', dbError)
+    return { error: 'Failed to start password reset. Please try again.' }
+  }
+
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').replace(/\/$/, '')
+  const resetUrl = `${siteUrl}/reset-password?token=${token}`
+
+  try {
+    await sendPasswordResetEmail({
+      toEmail: trimmedEmail,
+      resetUrl,
+      name: fullName,
+    })
+    return { success: true }
+  } catch (e: any) {
+    console.error('Password reset email send error:', e)
+    return { error: 'Failed to send reset email: ' + (e?.message || 'Check email configuration') }
+  }
+}
+
+// Verifies the reset token from the emailed link and sets the new password.
+export async function resetPasswordWithToken(
+  token: string,
+  newPassword: string
+): Promise<AuthResult> {
+  const adminSupabase = createAdminClient()
+
+  if (!token || !token.trim()) {
+    return { error: 'This reset link is invalid. Please request a new one.' }
+  }
+  if (!newPassword || newPassword.length < 6) {
+    return { error: 'Password must be at least 6 characters long.' }
+  }
+
+  const trimmedToken = token.trim()
+
+  const { data: record, error: fetchErr } = await adminSupabase
+    .from('email_otps')
+    .select('*')
+    .eq('otp', trimmedToken)
+    .maybeSingle()
+
+  if (fetchErr) {
+    console.error('Reset token lookup error:', fetchErr)
+    return { error: 'Failed to verify reset link. Please try again.' }
+  }
+
+  if (!record) {
+    return { error: 'This reset link is invalid or has already been used. Please request a new one.' }
+  }
+
+  if (new Date(record.expires_at) < new Date()) {
+    return { error: 'This reset link has expired. Please request a new one.' }
+  }
+
+  // Burn the token immediately so it can't be replayed.
+  await adminSupabase.from('email_otps').delete().eq('id', record.id)
+
+  const trimmedEmail = (record.email as string).toLowerCase()
+
+  const { data: profile } = await adminSupabase
+    .from('profiles')
+    .select('id, full_name, role')
+    .ilike('email', trimmedEmail)
+    .maybeSingle()
+
+  let userId = profile?.id || null
+  if (!userId) {
+    try {
+      const { data: userList } = await adminSupabase.auth.admin.listUsers()
+      const match = (userList?.users as any[])?.find((u: any) => u.email?.toLowerCase() === trimmedEmail)
+      userId = match?.id || null
+    } catch (e) {}
+  }
+
+  if (!userId) {
+    return { error: 'We could not find an account for this reset link.' }
+  }
+
+  const { error: updateError } = await adminSupabase.auth.admin.updateUserById(userId, {
+    password: newPassword,
+  })
+
+  if (updateError) {
+    console.error('Password update error:', updateError)
+    return { error: updateError.message || 'Failed to reset password. Please try again.' }
+  }
+
+  await setRawflexSessionCookie({
+    id: userId,
+    email: trimmedEmail,
+    full_name: profile?.full_name || record.full_name || 'Customer',
+    role: profile?.role || 'customer',
+  })
+
+  revalidatePath('/', 'layout')
   return { success: true }
 }
 

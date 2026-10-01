@@ -143,6 +143,94 @@ export async function sendOtpEmail({
 }
 
 /**
+ * Send Password Reset Link Email
+ */
+export async function sendPasswordResetEmail({
+  toEmail,
+  resetUrl,
+  name,
+}: {
+  toEmail: string
+  resetUrl: string
+  name?: string | null
+}) {
+  const subject = 'Reset your TeenZos password'
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${subject}</title>
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #0b0d0e; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #ffffff;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #0b0d0e; padding: 40px 16px;">
+        <tr>
+          <td align="center">
+            <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 480px; background-color: #121417; border-radius: 16px; border: 1px solid #23272d; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+
+              <!-- Brand Header -->
+              <tr>
+                <td style="padding: 32px 32px 24px; text-align: center; border-bottom: 1px solid #1f2329;">
+                  <h1 style="margin: 0; font-size: 26px; font-weight: 900; letter-spacing: 2px; color: #F72585;">TEENZOS</h1>
+                  <p style="margin: 4px 0 0; font-size: 11px; text-transform: uppercase; letter-spacing: 3px; color: #8a909a; font-weight: 700;">Streetwear & Lifestyle</p>
+                </td>
+              </tr>
+
+              <!-- Main Content -->
+              <tr>
+                <td style="padding: 32px 32px 24px; text-align: center;">
+                  <h2 style="margin: 0 0 12px; font-size: 20px; font-weight: 700; color: #ffffff;">
+                    Reset Your Password
+                  </h2>
+                  <p style="margin: 0 0 28px; font-size: 14px; line-height: 1.6; color: #9da3af;">
+                    ${name ? `Hey <strong style="color: #ffffff;">${name}</strong>,<br/>` : ''}
+                    We received a request to reset the password for your TeenZos account. Click the button below to choose a new password.
+                  </p>
+
+                  <div style="text-align: center; margin-bottom: 20px;">
+                    <a href="${resetUrl}" style="display: inline-block; background-color: #F72585; color: #ffffff; text-decoration: none; padding: 14px 34px; border-radius: 8px; font-weight: 800; font-size: 14px; letter-spacing: 1px; text-transform: uppercase;">
+                      RESET PASSWORD →
+                    </a>
+                  </div>
+
+                  <p style="margin: 0 0 16px; font-size: 12px; color: #6e7683; line-height: 1.5;">
+                    This link is valid for <strong style="color: #e5e7eb;">30 minutes</strong>. If you did not request a password reset, you can safely ignore this email — your password will stay the same.
+                  </p>
+
+                  <p style="margin: 0; font-size: 11px; color: #4a515c; word-break: break-all;">
+                    Or paste this link in your browser:<br/>
+                    <a href="${resetUrl}" style="color: #36B8C5;">${resetUrl}</a>
+                  </p>
+                </td>
+              </tr>
+
+              <!-- Footer -->
+              <tr>
+                <td style="padding: 24px 32px; text-align: center; border-top: 1px solid #1f2329; background-color: #0e1013;">
+                  <p style="margin: 0; font-size: 11px; color: #444a54;">
+                    &copy; ${new Date().getFullYear()} TeenZos Store. All rights reserved.
+                  </p>
+                </td>
+              </tr>
+
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `
+
+  await sendTransactionalEmail({
+    to: { email: toEmail, name: name || undefined },
+    subject,
+    htmlContent,
+  })
+}
+
+/**
  * Send Welcome Email upon Registration
  */
 export async function sendWelcomeEmail({
