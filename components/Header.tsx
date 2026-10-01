@@ -263,7 +263,7 @@ export default function Header() {
                 TeenZos<span className="text-pink">.</span>
               </span>
               <span className="text-[7.5px] sm:text-[8.5px] md:text-[9.5px] tracking-[0.18em] uppercase text-muted mt-0.5 font-[450]">
-                WEAR YOUR VIBE
+                Turn It Your&apos;s
               </span>
             </div>
           </Link>

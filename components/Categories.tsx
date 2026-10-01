@@ -251,9 +251,6 @@ export default function Categories({ categories = [] }: CategoriesProps) {
             className="group font-body font-bold text-xs sm:text-sm text-[#0B0D0E] hover:text-[#F72585] inline-flex items-center gap-1.5 transition-colors shrink-0 pb-1"
           >
             <span>View All</span>
-            <span className="transform group-hover:translate-x-1 transition-transform duration-200 text-sm sm:text-base leading-none">
-              →
-            </span>
           </Link>
         </div>
 

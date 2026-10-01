@@ -21,6 +21,7 @@ import {
   X,
   Ruler,
   Mail,
+  Video,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useAdminSidebar } from '@/context/AdminSidebarContext'
@@ -36,6 +37,7 @@ const navItems = [
   { label: 'Reviews', href: '/admin/reviews', icon: Star },
   { label: 'Inquiries', href: '/admin/inquiries', icon: MessageSquare },
   { label: 'Hero Section', href: '/admin/hero-slides', icon: ImageIcon },
+  { label: 'Video Section', href: '/admin/video-section', icon: Video },
   { label: 'Announcements', href: '/admin/announcements', icon: Megaphone },
   { label: 'Global FAQs', href: '/admin/settings/faqs', icon: Settings },
   { label: 'Shipping Settings', href: '/admin/settings/shipping', icon: Truck },

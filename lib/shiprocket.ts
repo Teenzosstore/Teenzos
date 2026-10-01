@@ -1,3 +1,4 @@
+import { SHIPROCKET_DEFAULT_PARCEL_CM, SHIPROCKET_WEIGHT_PER_ITEM_KG } from '@/lib/shiprocket-constants'
 const SHIPROCKET_BASE_URL = 'https://apiv2.shiprocket.in/v1/external'
 
 type ShiprocketConfig = {
@@ -104,10 +105,8 @@ export function getShiprocketConfig(): ShiprocketConfig {
 
 export function getDefaultShiprocketParcel(): ShiprocketParcel {
   return {
-    length: Number(process.env.SHIPROCKET_DEFAULT_LENGTH_CM || 10),
-    breadth: Number(process.env.SHIPROCKET_DEFAULT_BREADTH_CM || 10),
-    height: Number(process.env.SHIPROCKET_DEFAULT_HEIGHT_CM || 10),
-    weight: Number(process.env.SHIPROCKET_DEFAULT_WEIGHT_KG || 0.5),
+    ...SHIPROCKET_DEFAULT_PARCEL_CM,
+    weight: SHIPROCKET_WEIGHT_PER_ITEM_KG,
   }
 }
 
@@ -144,8 +143,9 @@ async function shiprocketRequest<T>(
   options: {
     method: 'GET' | 'POST'
     body?: unknown
-  }
-) {
+  },
+  retry = true
+): Promise<T> {
   const response = await fetch(`${SHIPROCKET_BASE_URL}${path}`, {
     method: options.method,
     headers: {
@@ -154,6 +154,13 @@ async function shiprocketRequest<T>(
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
   })
+
+  // A cached token can be rejected (expired / revoked): drop it, log in again
+  // and retry exactly once before giving up.
+  if (response.status === 401 && retry) {
+    cachedToken = null
+    return shiprocketRequest<T>(path, await getShiprocketToken(), options, false)
+  }
 
   const payload = await parseShiprocketResponse(response)
 
@@ -164,7 +171,15 @@ async function shiprocketRequest<T>(
   return payload as T
 }
 
+// Shiprocket tokens stay valid for days; logging in on every call (each
+// customer page view, each admin sync) is slow and risks rate limits, so keep
+// one per server instance for a few hours.
+let cachedToken: { value: string; expiresAt: number } | null = null
+const TOKEN_TTL_MS = 6 * 60 * 60 * 1000
+
 export async function getShiprocketToken() {
+  if (cachedToken && cachedToken.expiresAt > Date.now()) return cachedToken.value
+
   const config = getShiprocketConfig()
 
   const response = await fetch(`${SHIPROCKET_BASE_URL}/auth/login`, {
@@ -188,6 +203,7 @@ export async function getShiprocketToken() {
     throw new Error('Shiprocket did not return an auth token')
   }
 
+  cachedToken = { value: token as string, expiresAt: Date.now() + TOKEN_TTL_MS }
   return token as string
 }
 
@@ -234,4 +250,91 @@ export async function requestShiprocketPickup(shipmentId: number) {
 
 export function getShiprocketTrackingUrl(awbCode: string) {
   return `https://shiprocket.co/tracking/${encodeURIComponent(awbCode)}`
+}
+
+// Collapses Shiprocket's many shipment statuses into the order_status values
+// the rest of the app understands. Returns null when the status shouldn't
+// move the order (pickup scheduled, label generated, etc.).
+export function mapShiprocketStatusToOrderStatus(currentStatus: string | undefined | null): string | null {
+  if (!currentStatus) return null
+  const s = currentStatus.toLowerCase()
+
+  // RTO / undelivered must be checked before "delivered" — "RTO Delivered"
+  // and "Undelivered" both contain that word but mean the parcel came back.
+  if (/\brto\b/.test(s) || s.includes('undelivered') || s.includes('return')) return 'cancelled'
+  if (s.includes('cancel')) return 'cancelled'
+  if (s.includes('delivered')) return 'delivered'
+  if (s.includes('out for delivery') || s.includes('in transit') || s.includes('shipped') || s.includes('picked up')) {
+    return 'shipped'
+  }
+  return null
+}
+
+export type ShiprocketScanEvent = {
+  date: string | null
+  status: string | null
+  activity: string | null
+  location: string | null
+}
+
+// Pull-based status check for a shipment that already has an AWB. Used by the
+// admin panel's refresh / "Sync All" for orders whose webhook update never
+// arrived, and to show the scan-by-scan timeline (where the parcel is now).
+export async function trackShipmentByAwb(awbCode: string) {
+  const token = await getShiprocketToken()
+  const data = await shiprocketRequest<any>(`/courier/track/awb/${encodeURIComponent(awbCode)}`, token, {
+    method: 'GET',
+  })
+
+  const shipmentData = data?.tracking_data?.shipment_track?.[0]
+  const activities: any[] = data?.tracking_data?.shipment_track_activities || []
+
+  const scans: ShiprocketScanEvent[] = activities.map((a) => ({
+    date: a?.date ? String(a.date) : null,
+    status: a?.status ? String(a.status) : null,
+    activity: a?.activity ? String(a.activity) : null,
+    location: a?.location ? String(a.location) : null,
+  }))
+
+  return {
+    currentStatus: shipmentData?.current_status ? String(shipmentData.current_status) : null,
+    courierName: shipmentData?.courier_name ? String(shipmentData.courier_name) : null,
+    currentLocation: scans[0]?.location || null,
+    scans,
+  }
+}
+
+// For a shipment with no AWB in our DB yet — asks Shiprocket for the order
+// itself. This picks up the current order status ("NEW", "READY TO SHIP"...)
+// and, if an admin chose the courier directly in Shiprocket's dashboard, the
+// AWB and courier too, even if the webhook for it never reached us.
+export async function getShiprocketOrderStatus(shiprocketOrderId: string) {
+  const token = await getShiprocketToken()
+  const data = await shiprocketRequest<any>(`/orders/show/${encodeURIComponent(shiprocketOrderId)}`, token, {
+    method: 'GET',
+  })
+
+  const order = data?.data
+  // `shipments` is an object for a one-shipment order, an array when split.
+  const shipment = Array.isArray(order?.shipments) ? order.shipments[0] : order?.shipments
+
+  const awbCode =
+    shipment?.awb || shipment?.awb_code || order?.last_mile_awb || order?.awb_code || order?.awb || null
+  const courierName =
+    shipment?.courier || shipment?.courier_name || order?.last_mile_courier_name || order?.courier_name || null
+
+  if (!awbCode && order?.status && !/^(new|invoiced|ready to ship)$/i.test(String(order.status))) {
+    // A status past "NEW" normally implies a courier — log the raw shape so
+    // the real AWB field name can be identified if we still find none.
+    console.warn(
+      `[Shiprocket] No AWB found for order ${shiprocketOrderId} (status: ${order.status}). Raw shipments:`,
+      JSON.stringify(order?.shipments)
+    )
+  }
+
+  return {
+    currentStatus: order?.status ? String(order.status) : null,
+    awbCode: awbCode ? String(awbCode) : null,
+    courierName: courierName ? String(courierName) : null,
+  }
 }

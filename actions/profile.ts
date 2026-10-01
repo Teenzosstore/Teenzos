@@ -381,68 +381,6 @@ export async function setDefaultCustomerAddress(addressId: string) {
   return { success: true }
 }
 
-export async function trackOrderAction(orderNumberOrId: string) {
-  const trimmed = orderNumberOrId.trim()
-  if (!trimmed) {
-    return { success: false, error: 'Order number is required.' }
-  }
-
-  const adminSupabase = createAdminClient()
-
-  // 1. Try search by order_number (case-insensitive substring/match)
-  let { data: orders, error } = await adminSupabase
-    .from('orders')
-    .select(`
-      *,
-      order_items (
-        id,
-        product_id,
-        variant_id,
-        product_name,
-        variant_name,
-        price_at_purchase,
-        quantity,
-        line_total
-      )
-    `)
-    .ilike('order_number', `%${trimmed}%`)
-    .limit(1)
-
-  // 2. Try by tracking_number if not found
-  if (!orders || orders.length === 0) {
-    const { data: altOrders } = await adminSupabase
-      .from('orders')
-      .select(`
-        *,
-        order_items (
-          id,
-          product_id,
-          variant_id,
-          product_name,
-          variant_name,
-          price_at_purchase,
-          quantity,
-          line_total
-        )
-      `)
-      .ilike('tracking_number', `%${trimmed}%`)
-      .limit(1)
-
-    if (altOrders && altOrders.length > 0) {
-      orders = altOrders
-    }
-  }
-
-  if (!orders || orders.length === 0) {
-    return {
-      success: false,
-      error: `No live order found with number "${trimmed}". Please check the order number or view your Recent Orders.`
-    }
-  }
-
-  return { success: true, order: orders[0] }
-}
-
 export async function getLiveCustomerData() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

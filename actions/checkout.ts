@@ -5,12 +5,37 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import crypto from 'crypto'
 import { trySendOrderConfirmationEmail } from '@/lib/orderConfirmationEmail'
-import { tryCreateShiprocketShipmentAndAssignAwbForOrder } from '@/lib/shiprocketOrder'
+import {
+  createRazorpayOrder,
+  getRazorpayKeyId,
+  isRazorpayEnabled,
+  verifyRazorpayPaymentSignature,
+} from '@/lib/razorpay'
+import { processRazorpayPayment } from '@/lib/razorpayFulfillment'
+
+type PaymentMethod = 'COD' | 'RAZORPAY'
 
 type CheckoutResult =
   | { success: false; error: string }
   | {
       success: true
+      order_number: string
+      orderId: string
+      totalAmount: number
+      isRazorpay?: false
+    }
+  | {
+      success: true
+      isRazorpay: true
+      razorpay: {
+        keyId: string
+        orderId: string
+        amount: number
+        currency: string
+        name: string
+        email: string
+        contact: string
+      }
       order_number: string
       orderId: string
       totalAmount: number
@@ -240,7 +265,7 @@ async function decrementOrderStockOnce(supabase: any, orderId: string) {
 async function calculateResolvedTotals(
   supabase: any,
   resolved: { subtotal: number },
-  paymentMethod: 'COD' = 'COD',
+  paymentMethod: PaymentMethod = 'COD',
   couponCode?: string
 ) {
   const shippingSettings = await getShippingSettings(supabase)
@@ -251,11 +276,15 @@ async function calculateResolvedTotals(
   if (coupon.error) return { error: coupon.error }
 
   const shipping_cost = resolved.subtotal >= freeThreshold ? 0 : flatRate
-  const cod_cost = codCharge
-  const online_discount_amount = 0
+  const isOnline = paymentMethod !== 'COD'
+  const cod_cost = isOnline ? 0 : codCharge
+  const onlineDiscountPercent = Math.min(100, Math.max(0, Number(shippingSettings.online_discount ?? 0)))
+  const online_discount_amount = isOnline
+    ? Math.round((resolved.subtotal * onlineDiscountPercent) / 100)
+    : 0
   const total_amount = Math.max(
     0,
-    resolved.subtotal + shipping_cost + cod_cost - coupon.discount
+    resolved.subtotal + shipping_cost + cod_cost - coupon.discount - online_discount_amount
   )
 
   return {
@@ -272,7 +301,7 @@ async function calculateResolvedTotals(
 
 export async function calculateCheckoutTotals(
   cartItemsFromFrontend: CheckoutCartItem[],
-  paymentMethod: 'COD' = 'COD',
+  paymentMethod: PaymentMethod = 'COD',
   couponCode?: string
 ) {
   const adminSupabase = createAdminClient()
@@ -295,7 +324,7 @@ export async function calculateCheckoutTotals(
 
 export async function createOrder(
   addressId: string,
-  paymentMethod: 'COD' = 'COD',
+  paymentMethod: PaymentMethod = 'COD',
   cartItemsFromFrontend: CheckoutCartItem[],
   couponCode?: string
 ): Promise<CheckoutResult> {
@@ -306,7 +335,7 @@ export async function createOrder(
 
   const { data: address } = await adminSupabase
     .from('addresses')
-    .select('id')
+    .select('id, full_name, phone')
     .eq('id', addressId)
     .eq('user_id', user.id)
     .single()
@@ -319,8 +348,12 @@ export async function createOrder(
   const totals = await calculateResolvedTotals(adminSupabase, resolved, paymentMethod, couponCode)
   if (totals.error) return { success: false, error: totals.error }
 
-  const order_number = `AM-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`
-  const actualPaymentMethod = 'Cash on Delivery'
+  const order_number = `TZ-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`
+  const isRazorpay = paymentMethod === 'RAZORPAY'
+  if (isRazorpay && !isRazorpayEnabled()) {
+    return { success: false, error: 'Online payments are not configured yet. Please choose Cash on Delivery.' }
+  }
+  const actualPaymentMethod = isRazorpay ? 'Online Payment (Razorpay)' : 'Cash on Delivery'
 
   const { data: order, error: orderError } = await adminSupabase
     .from('orders')
@@ -351,6 +384,29 @@ export async function createOrder(
     return { success: false, error: 'Failed to create order items' }
   }
 
+  // Razorpay: create the gateway order before touching coupons, so a gateway
+  // failure leaves nothing behind (no orphan order, no burnt coupon use).
+  let razorpayOrder: { id: string; amount: number; currency: string } | null = null
+  if (isRazorpay) {
+    try {
+      razorpayOrder = await createRazorpayOrder({
+        amountPaise: Math.round(totals.total_amount * 100),
+        receipt: order.order_number,
+        notes: { internal_order_id: order.id, order_number: order.order_number },
+      })
+
+      const { error: linkError } = await adminSupabase
+        .from('orders')
+        .update({ razorpay_order_id: razorpayOrder.id })
+        .eq('id', order.id)
+      if (linkError) throw new Error(linkError.message)
+    } catch (error: any) {
+      console.error('Razorpay order creation failed:', error)
+      await adminSupabase.from('orders').delete().eq('id', order.id)
+      return { success: false, error: 'Failed to start online payment. Please try again.' }
+    }
+  }
+
   if (totals.couponId) {
     const { data: currentCoupon } = await adminSupabase
       .from('coupons')
@@ -362,6 +418,27 @@ export async function createOrder(
       .from('coupons')
       .update({ used_count: Number(currentCoupon?.used_count || 0) + 1 })
       .eq('id', totals.couponId)
+  }
+
+  if (isRazorpay && razorpayOrder) {
+    // Stock, cart and confirmation email are handled by lib/orderPayment.ts
+    // once the payment is verified (browser verify call or Razorpay webhook).
+    return {
+      success: true,
+      isRazorpay: true,
+      razorpay: {
+        keyId: getRazorpayKeyId(),
+        orderId: razorpayOrder.id,
+        amount: razorpayOrder.amount,
+        currency: razorpayOrder.currency,
+        name: address.full_name || '',
+        email: user.email || '',
+        contact: address.phone || '',
+      },
+      order_number: order.order_number,
+      orderId: order.id,
+      totalAmount: totals.total_amount,
+    }
   }
 
   try {
@@ -376,7 +453,6 @@ export async function createOrder(
     .delete()
     .eq('user_id', user.id)
 
-  await tryCreateShiprocketShipmentAndAssignAwbForOrder(adminSupabase, order.id)
   await trySendOrderConfirmationEmail(adminSupabase, order.id)
 
   revalidatePath('/cart')
@@ -390,7 +466,7 @@ export async function createOrder(
 export async function processCheckout(
   profile: { fullName: string, email: string, phone: string, alternatePhone?: string, street: string, city: string, state: string, zipCode: string },
   items: CheckoutCartItem[],
-  paymentMethod: 'COD' = 'COD',
+  paymentMethod: PaymentMethod = 'COD',
   couponCode?: string
 ): Promise<CheckoutResult> {
   const supabase = await createClient()
@@ -463,4 +539,29 @@ export async function processCheckout(
   }
 
   return await createOrder(addressId, paymentMethod, items, couponCode)
+}
+
+// Called from the browser after Razorpay Checkout succeeds. The signature is
+// HMAC(order_id|payment_id) keyed with our secret, so only a genuine Razorpay
+// payment can pass — no login check is needed, and the webhook independently
+// confirms the same payment as a backup.
+export async function verifyRazorpayPayment(
+  razorpayPaymentId: string,
+  razorpayOrderId: string,
+  razorpaySignature: string
+): Promise<{ success: true; orderNumber: string } | { success: false; error: string }> {
+  if (!verifyRazorpayPaymentSignature(razorpayOrderId, razorpayPaymentId, razorpaySignature)) {
+    return { success: false, error: 'Payment verification failed: invalid signature.' }
+  }
+
+  const result = await processRazorpayPayment({ razorpayOrderId, razorpayPaymentId })
+  if (result.ok === false) {
+    return { success: false, error: 'We could not match this payment to an order.' }
+  }
+
+  revalidatePath('/cart')
+  revalidatePath('/checkout')
+  revalidatePath('/profile')
+  revalidatePath('/admin/orders')
+  return { success: true, orderNumber: result.orderNumber }
 }

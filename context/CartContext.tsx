@@ -32,6 +32,8 @@ export type AddToCartOptions = {
   clientY?: number
   skipFly?: boolean
   skipNotification?: boolean
+  // How many units to add (defaults to 1) — used by "Buy Again".
+  quantity?: number
 }
 
 type CartContextType = {
@@ -236,10 +238,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     item: Omit<CartItem, 'quantity' | 'cartItemId'>,
     options?: AddToCartOptions
   ) => {
-    setCart((prev) => upsertCartItem(prev, item, 1))
+    const quantity = normalizeQuantity(options?.quantity ?? 1)
+    setCart((prev) => upsertCartItem(prev, item, quantity))
 
     if (isLoggedIn && item.variant_id) {
-      addCartItemToDb(item.variant_id, 1)
+      addCartItemToDb(item.variant_id, quantity)
         .then((result) => {
           if (!result.success) {
             console.error(result.error || 'Failed to persist cart item')

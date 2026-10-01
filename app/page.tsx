@@ -9,6 +9,8 @@ import RealStories from "@/components/RealStories";
 import CustomerReviewsSection from "@/components/CustomerReviewsSection";
 import NewsletterCTA from "@/components/NewsletterCTA";
 import Footer from "@/components/Footer";
+import ShoppableVideoSection from "@/components/ShoppableVideoSection";
+import { getHomeShoppableVideos, videoSectionSettingsFromRow } from "@/lib/shoppableVideos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { selectDisplayVariant } from "@/lib/productVariants";
 import { productMatchesCategory, slugify } from "@/lib/shopProducts";
@@ -102,6 +104,7 @@ export default async function Home() {
     { data: homeBannerImagesData },
     { data: lookbookImagesData, error: lookbookImagesError },
     { data: reviewsData },
+    shoppableVideos,
   ] = await Promise.all([
     supabase.from("categories").select("*"),
     supabase
@@ -147,6 +150,7 @@ export default async function Home() {
       .eq("is_approved", true)
       .order("created_at", { ascending: false })
       .limit(30),
+    getHomeShoppableVideos(supabase),
   ]);
 
   // Product counts per category - computed live in real-time from active products in database
@@ -239,6 +243,15 @@ export default async function Home() {
     : heroLeftText(settingsData);
   const oversizedSettings = oversizedSectionSettings(settingsData);
   const lookbookImages = lookbookImagesError ? undefined : lookbookImagesData || [];
+  const videoSection = videoSectionSettingsFromRow(settingsData);
+  const videoSectionNode = (
+    <ShoppableVideoSection
+      videos={shoppableVideos}
+      title={videoSection.title}
+      subtitle={videoSection.subtitle}
+      instagramUrl={videoSection.instagramUrl || undefined}
+    />
+  );
 
   return (
     <main className="overflow-x-hidden">
@@ -250,7 +263,9 @@ export default async function Home() {
       />
       <TrustBar />
       <Categories categories={categories} />
+      {videoSection.placement === "before_products" && videoSectionNode}
       <TrendingNow initialProducts={products} />
+      {videoSection.placement === "after_products" && videoSectionNode}
       <OversizedPromo />
       <WhyTeenzos />
       <RealStories />

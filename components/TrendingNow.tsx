@@ -31,7 +31,7 @@ interface TrendingNowProps {
 
 export default function TrendingNow({ initialProducts = [] }: TrendingNowProps) {
   const [activeTab, setActiveTab] = useState("all");
-  const [visibleCount, setVisibleCount] = useState(5);
+  const [visibleCount, setVisibleCount] = useState(8);
   const [wishlist, setWishlist] = useState<Record<string, boolean>>({});
   const [selectedColorMap, setSelectedColorMap] = useState<Record<string, number>>({});
   const [addedAnimation, setAddedAnimation] = useState<Record<string, boolean>>({});
@@ -116,11 +116,11 @@ export default function TrendingNow({ initialProducts = [] }: TrendingNowProps) 
 
   const handleTabChange = (tabId: string) => {
     setActiveTab(tabId);
-    setVisibleCount(5);
+    setVisibleCount(8);
   };
 
   const handleLoadMore = () => {
-    setVisibleCount((prev) => prev + 5);
+    setVisibleCount((prev) => prev + 8);
   };
 
   // Wishlist local persistence (exact same as Shop page)
@@ -234,7 +234,7 @@ export default function TrendingNow({ initialProducts = [] }: TrendingNowProps) 
       aria-label="Trending Now - Most Loved Tees"
       className="w-full bg-[#FFFFFF] py-8 sm:py-12 md:py-16 lg:py-20 select-none overflow-hidden"
     >
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10">
+      <div className="max-w-[1800px] mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
         
         {/* ── Section Header & Filter Navigation ── */}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 sm:gap-5 mb-7 sm:mb-9">
@@ -273,19 +273,17 @@ export default function TrendingNow({ initialProducts = [] }: TrendingNowProps) 
               className="group hidden sm:inline-flex items-center gap-1.5 font-body font-bold text-xs sm:text-sm text-[#0B0D0E] hover:text-[#F72585] transition-colors ml-2 whitespace-nowrap"
             >
               <span>View All</span>
-              <span className="transform group-hover:translate-x-1 transition-transform duration-200 text-sm leading-none">
-                →
-              </span>
             </Link>
           </div>
         </div>
 
-        {/* ── Products Grid: 2 columns on mobile, 3 on tablet, 5 on desktop ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
+        {/* ── Products Grid: 2 columns on mobile, 3 on tablet, 4 large cards on desktop ── */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-7 sm:gap-x-4 sm:gap-y-9 lg:gap-x-6 lg:gap-y-11">
           {visibleProducts.map((product) => (
             <TrendingProductCard
               key={product.id}
               product={product}
+              variant="large"
               isWishlisted={!!wishlist[product.id]}
               isLiked={!!wishlist[product.id]}
               onToggleWishlist={toggleWishlist}
@@ -313,7 +311,6 @@ export default function TrendingNow({ initialProducts = [] }: TrendingNowProps) 
               className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-[5px] border border-stone-300 font-body font-bold text-xs text-[#0B0D0E] hover:bg-black hover:text-white transition-colors"
             >
               <span>View All in Shop</span>
-              <span>→</span>
             </Link>
           </div>
         </div>

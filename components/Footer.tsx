@@ -28,7 +28,7 @@ const HELP_LINKS = [
   { label: "Contact Us", href: "/contact" },
   {
     label: "Track Order",
-    href: "https://wa.me/917862907344?text=Hi%20TeenZos!%20Can%20you%20help%20me%20track%20my%20order%3F",
+    href: "/orders/track",
   },
   { label: "Shipping", href: "/policies/shipping" },
   { label: "Returns", href: "/policies/refund" },

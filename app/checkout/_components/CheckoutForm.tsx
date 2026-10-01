@@ -4,7 +4,7 @@ import React, { useState, useEffect, useTransition } from 'react'
 import { useCart } from '@/context/CartContext'
 import { useToast } from '@/context/ToastContext'
 import { validateCoupon } from '@/actions/admin/coupons'
-import { calculateCheckoutTotals, processCheckout } from '@/actions/checkout'
+import { calculateCheckoutTotals, processCheckout, verifyRazorpayPayment } from '@/actions/checkout'
 import { getCurrentCustomerProfileForClient, sendEmailOtp, verifyEmailOtp } from '@/actions/auth'
 import { SITE } from '@/lib/data'
 import {
@@ -23,6 +23,7 @@ import {
   Check,
 } from 'lucide-react'
 import Image from 'next/image'
+import Script from 'next/script'
 import Link from 'next/link'
 
 type ShippingSettings = {
@@ -102,10 +103,12 @@ export default function CheckoutForm({
   shipping,
   isLoggedIn,
   hasCoupons = false,
+  razorpayEnabled = false,
 }: {
   shipping: ShippingSettings
   isLoggedIn: boolean
   hasCoupons?: boolean
+  razorpayEnabled?: boolean
 }) {
   const { cart, cartTotal, clearCart, updateQuantity, removeFromCart } = useCart()
   const { showToast } = useToast()
@@ -180,7 +183,11 @@ export default function CheckoutForm({
   const [quoteError, setQuoteError] = useState('')
 
   // Payment Method
-  const [paymentMethod, setPaymentMethod] = useState<'Cash on Delivery'>('Cash on Delivery')
+  const [paymentMethod, setPaymentMethod] = useState<'Cash on Delivery' | 'Online Payment'>(
+    razorpayEnabled ? 'Online Payment' : 'Cash on Delivery'
+  )
+  const isOnline = paymentMethod === 'Online Payment'
+  const apiPaymentMethod = isOnline ? 'RAZORPAY' : 'COD'
 
   // Success Modal State
   const [placedOrder, setPlacedOrder] = useState<any>(null)
@@ -226,7 +233,7 @@ export default function CheckoutForm({
   const clientSubtotal = cartTotal
   const clientShippingFee =
     clientSubtotal >= (shipping.free_threshold ?? 1999) ? 0 : shipping.flat_rate ?? 99
-  const clientCodFee = shipping.cod_charge ?? 50
+  const clientCodFee = isOnline ? 0 : shipping.cod_charge ?? 50
 
   let clientDiscount = 0
   if (activeCoupon) {
@@ -237,15 +244,20 @@ export default function CheckoutForm({
     }
   }
 
+  const clientOnlineDiscount = isOnline
+    ? Math.round((clientSubtotal * (shipping.online_discount ?? 0)) / 100)
+    : 0
+
   const clientGrandTotal = Math.max(
     0,
-    clientSubtotal + clientShippingFee + clientCodFee - clientDiscount
+    clientSubtotal + clientShippingFee + clientCodFee - clientDiscount - clientOnlineDiscount
   )
 
   const subtotal = serverQuote?.subtotal ?? clientSubtotal
   const shippingFee = serverQuote?.shipping_cost ?? clientShippingFee
   const codFee = serverQuote?.cod_cost ?? clientCodFee
   const discount = serverQuote?.coupon_discount ?? clientDiscount
+  const onlineDiscountAmount = serverQuote?.online_discount_amount ?? clientOnlineDiscount
   const grandTotal = serverQuote?.total_amount ?? clientGrandTotal
 
   // Threshold & Free Shipping Progress
@@ -266,7 +278,7 @@ export default function CheckoutForm({
 
       const result = await calculateCheckoutTotals(
         cart,
-        'COD',
+        apiPaymentMethod,
         activeCoupon ? couponCode : undefined
       )
       if (!active) return
@@ -298,7 +310,7 @@ export default function CheckoutForm({
     return () => {
       active = false
     }
-  }, [cart, activeCoupon, couponCode])
+  }, [cart, activeCoupon, couponCode, apiPaymentMethod])
 
   // Handle Coupon Apply
   const handleApplyCoupon = async () => {
@@ -332,6 +344,74 @@ export default function CheckoutForm({
     setCouponError('')
   }
 
+  // Opens Razorpay Checkout for an order the server already created. The
+  // handler only fires on a successful payment; the server re-verifies the
+  // signature, and the Razorpay webhook confirms it again as a backup.
+  const openRazorpay = (res: {
+    razorpay: { keyId: string; orderId: string; amount: number; currency: string; name: string; email: string; contact: string }
+    order_number: string
+  }) => {
+    const Razorpay = (window as any).Razorpay
+    if (!Razorpay) {
+      showToast('Payment gateway is still loading. Please wait a moment and try again.', 'error')
+      return
+    }
+
+    const options = {
+      key: res.razorpay.keyId,
+      amount: res.razorpay.amount,
+      currency: res.razorpay.currency,
+      name: SITE.name,
+      description: `Order ${res.order_number}`,
+      order_id: res.razorpay.orderId,
+      prefill: {
+        name: res.razorpay.name,
+        email: res.razorpay.email,
+        contact: res.razorpay.contact,
+      },
+      theme: { color: '#F72585' },
+      modal: {
+        ondismiss: () => {
+          showToast('Payment cancelled. You can try again whenever you are ready.', 'info')
+        },
+      },
+      handler: async (response: any) => {
+        try {
+          const verified = await verifyRazorpayPayment(
+            response.razorpay_payment_id,
+            response.razorpay_order_id,
+            response.razorpay_signature
+          )
+          if (verified.success === false) {
+            showToast(verified.error, 'error')
+            return
+          }
+          // The success page clears the cart and shows the paid order.
+          window.location.assign(`/checkout/complete?order=${encodeURIComponent(verified.orderNumber)}`)
+        } catch (e) {
+          // The customer has been charged but our confirmation call failed —
+          // the webhook will still mark it paid; tell them clearly meanwhile.
+          console.error('Failed to verify Razorpay payment:', e)
+          showToast(
+            `Payment received, but we couldn't confirm it automatically. Please contact support with order ${res.order_number}.`,
+            'error'
+          )
+        }
+      },
+    }
+
+    try {
+      const rzp = new Razorpay(options)
+      rzp.on('payment.failed', (failure: any) => {
+        showToast(`Payment failed: ${failure?.error?.description || 'please try again'}`, 'error')
+      })
+      rzp.open()
+    } catch (e) {
+      console.error('Failed to open Razorpay checkout:', e)
+      showToast('Could not open the payment window. Please refresh and try again.', 'error')
+    }
+  }
+
   // Execute checkout and place order
   const executeOrderPlacement = async () => {
     const addressString = `${profile.street}, ${profile.city}, ${profile.state} - ${profile.zipCode}`
@@ -339,10 +419,13 @@ export default function CheckoutForm({
     // Save profile to localstorage on order place
     localStorage.setItem('rawflex-customer-profile', JSON.stringify(profile))
 
-    const res = await processCheckout(profile, cart, 'COD', activeCoupon ? couponCode : undefined)
+    const res = await processCheckout(profile, cart, apiPaymentMethod, activeCoupon ? couponCode : undefined)
 
     if (res.success === false) {
       showToast(res.error || 'Failed to place order.', 'error')
+    } else if ('isRazorpay' in res && res.isRazorpay) {
+      // Cart is cleared on the success page only after payment is verified.
+      openRazorpay(res)
     } else {
       setPlacedOrder({
         order_number: res.order_number,
@@ -666,10 +749,17 @@ export default function CheckoutForm({
           </span>
         </div>
 
-        {paymentMethod === 'Cash on Delivery' && (
+        {!isOnline && (
           <div className="flex justify-between text-gray-600">
             <span>Cash on Delivery (COD) Fee</span>
             <span className="font-semibold text-gray-900">₹{codFee}</span>
+          </div>
+        )}
+
+        {isOnline && onlineDiscountAmount > 0 && (
+          <div className="flex justify-between text-emerald-600 font-medium">
+            <span>Online Payment Discount</span>
+            <span className="font-bold">-₹{onlineDiscountAmount.toLocaleString('en-IN')}</span>
           </div>
         )}
 
@@ -759,6 +849,9 @@ export default function CheckoutForm({
 
   return (
     <>
+      {razorpayEnabled && (
+        <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />
+      )}
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
         {/* ======================================================== */}
         {/* MOBILE TOP COLLAPSIBLE ORDER SUMMARY (VISIBLE ON MOBILE) */}
@@ -1016,12 +1109,51 @@ export default function CheckoutForm({
             </div>
 
             <div className="grid grid-cols-1 gap-3">
-              <label className="flex items-start gap-3.5 p-4 rounded-[5px] border-2 border-[#0B0D0E] bg-gray-50/80 cursor-pointer transition-all hover:bg-gray-100/80">
+              {razorpayEnabled && (
+                <label
+                  className={`flex items-start gap-3.5 p-4 rounded-[5px] border-2 cursor-pointer transition-all ${
+                    isOnline
+                      ? 'border-[#0B0D0E] bg-gray-50/80'
+                      : 'border-gray-200 hover:bg-gray-50/60'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="payment"
+                    checked={isOnline}
+                    onChange={() => setPaymentMethod('Online Payment')}
+                    className="mt-1 w-4 h-4 text-[#0B0D0E] focus:ring-[#0B0D0E]"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sm text-gray-900">
+                        Pay Online (UPI / Cards / Net Banking)
+                      </span>
+                      {(shipping.online_discount ?? 0) > 0 && (
+                        <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                          {shipping.online_discount}% OFF
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs text-gray-500 block mt-1">
+                      Secure payment via Razorpay. No COD fee.
+                    </span>
+                  </div>
+                </label>
+              )}
+
+              <label
+                className={`flex items-start gap-3.5 p-4 rounded-[5px] border-2 cursor-pointer transition-all ${
+                  !isOnline
+                    ? 'border-[#0B0D0E] bg-gray-50/80'
+                    : 'border-gray-200 hover:bg-gray-50/60'
+                }`}
+              >
                 <input
                   type="radio"
                   name="payment"
-                  checked={true}
-                  readOnly
+                  checked={!isOnline}
+                  onChange={() => setPaymentMethod('Cash on Delivery')}
                   className="mt-1 w-4 h-4 text-[#0B0D0E] focus:ring-[#0B0D0E]"
                 />
                 <div className="flex-1">
@@ -1128,7 +1260,7 @@ export default function CheckoutForm({
                   <ShoppingBag className="w-4 h-4 group-hover:scale-110 transition-transform" />
                   <span>
                     {isLoggedIn
-                      ? `Place Order • ₹${grandTotal.toLocaleString('en-IN')}`
+                      ? `${isOnline ? 'Pay Now' : 'Place Order'} • ₹${grandTotal.toLocaleString('en-IN')}`
                       : otpSent
                       ? 'Confirm OTP & Place Order'
                       : 'Verify Email & Place Order'}
@@ -1154,7 +1286,7 @@ export default function CheckoutForm({
               <div className="flex flex-col items-center gap-1 p-2 rounded-xl bg-gray-50/80">
                 <CheckCircle2 className="w-4 h-4 text-[#F72585]" />
                 <span className="text-[10px] font-bold text-gray-700 leading-tight">
-                  COD Available
+                  {razorpayEnabled ? 'UPI / COD' : 'COD Available'}
                 </span>
               </div>
             </div>

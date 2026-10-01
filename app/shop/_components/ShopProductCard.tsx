@@ -75,7 +75,7 @@ export default function ShopProductCard({
     return (
       <div className="group relative flex flex-col sm:flex-row items-center gap-4 sm:gap-6 bg-white rounded-[5px] border border-stone-200/90 p-3 sm:p-4 hover:border-stone-400 hover:shadow-xl transition-all duration-300">
         {/* List Image Box */}
-        <div className="relative aspect-[3.5/4.3] w-full sm:w-44 shrink-0 rounded-[5px] bg-[#F7F7F5] border border-stone-200/60 overflow-hidden  flex items-center justify-center">
+        <div className="relative aspect-[4/5] w-full sm:w-44 shrink-0 rounded-[5px] bg-[#F7F7F5] border border-stone-200/60 overflow-hidden  flex items-center justify-center">
           <Link href={productHref} className="block relative w-full h-full">
             <Image
               src={imgSrc}
@@ -227,7 +227,7 @@ export default function ShopProductCard({
       className="group relative flex flex-col justify-between bg-white rounded-[5px] border border-stone-200/90 p-2.5 sm:p-2.5 md:p-3 hover:border-stone-400 hover:shadow-xl transition-all duration-300"
     >
       {/* ── Image Box with rounded-[5px] ── */}
-      <div className="relative aspect-[4/4.3] w-full rounded-[5px] bg-[#F7F7F5] border border-stone-200/60 overflow-hidden mb-2.5 sm:mb-3 flex items-center justify-center">
+      <div className="relative aspect-[4/5] w-full rounded-[5px] bg-[#F7F7F5] border border-stone-200/60 overflow-hidden mb-2.5 sm:mb-3 flex items-center justify-center">
         <Link href={productHref} className="block relative w-full h-full">
           <Image
             src={imgSrc}

@@ -40,7 +40,6 @@ import {
   saveCustomerAddress,
   deleteCustomerAddress,
   setDefaultCustomerAddress,
-  trackOrderAction,
   getLiveCustomerData,
 } from '@/actions/profile'
 import { logoutForClient } from '@/actions/auth'
@@ -48,7 +47,7 @@ import { useToast } from '@/context/ToastContext'
 import { useCart } from '@/context/CartContext'
 import { createClient } from '@/lib/supabase/client'
 import TrendingProductCard from '@/components/TrendingProductCard'
-import { SHOP_PRODUCTS } from '@/lib/shopProducts'
+import { selectDisplayVariant } from '@/lib/productVariants'
 
 // Types
 export interface CustomerProfileData {
@@ -154,7 +153,7 @@ export default function CustomerAccountView({
 
   // Active navigation tab
   const [activeTab, setActiveTab] = useState<
-    'profile' | 'orders' | 'tracking' | 'wishlist' | 'addresses' | 'settings'
+    'profile' | 'orders' | 'wishlist' | 'addresses' | 'settings'
   >('profile')
 
   // Live state (100% Real Supabase Data)
@@ -171,15 +170,6 @@ export default function CustomerAccountView({
   const [wishlistCount, setWishlistCount] = useState(0)
   const [wishlistItems, setWishlistItems] = useState<any[]>([])
   const [dbProducts, setDbProducts] = useState<any[]>([])
-
-  // Tracking state
-  const [trackingInput, setTrackingInput] = useState('')
-  const [activeTrackedOrder, setActiveTrackedOrder] = useState<CustomerOrderData | null>(null)
-  const [isTrackingSearching, setIsTrackingSearching] = useState(false)
-  const [isRefreshingLive, setIsRefreshingLive] = useState(false)
-  const [lastTrackingSyncTime, setLastTrackingSyncTime] = useState<string>('Live')
-  const [trackingFeedback, setTrackingFeedback] = useState<string | null>(null)
-  const hasInitializedTrackingRef = React.useRef(false)
 
   // Selected Product Information Modal state
   const [selectedProductItem, setSelectedProductItem] = useState<{
@@ -247,31 +237,37 @@ export default function CustomerAccountView({
           .order('created_at', { ascending: false })
 
         if (!error && Array.isArray(data)) {
+          const { data: categoryRows } = await supabase.from('categories').select('id, name')
+          const categoryNames = new Map<string, string>(
+            (categoryRows || []).map((c: any) => [c.id, c.name] as [string, string])
+          )
+
+          // Everything below comes straight from the product rows — price from
+          // the live variant, discount only when a real original price exists.
           const formatted = data.map((p: any) => {
-            const price = Number(p.price || 999)
-            const oldPrice = Number(p.oldPrice || Math.round(price * 1.25))
-            const discount =
-              p.oldPrice && p.oldPrice > price
-                ? `${Math.round(((p.oldPrice - price) / p.oldPrice) * 100)}% OFF`
-                : '20% OFF'
+            const variant = selectDisplayVariant(p.product_variants)
+            const price = Number(p.price || variant?.price || 0)
+            const original = p.oldPrice ? Number(p.oldPrice) : variant?.original_price ? Number(variant.original_price) : null
+            const hasDiscount = original !== null && original > price
+            const activeVariants = (p.product_variants || []).filter((v: any) => v.is_active !== false)
 
             return {
               id: p.id,
+              variant_id: variant?.id || null,
               slug: p.slug || p.id,
               name: p.name,
-              category_id: p.category_id || 't-shirts',
-              category_name: 'Streetwear',
+              category_id: p.category_id,
+              category_name: categoryNames.get(p.category_id) || '',
               price,
-              oldPrice,
-              discount,
-              image_url: p.featured_image_url || p.product_images?.[0]?.image_url || '/image.png',
+              oldPrice: hasDiscount ? original : undefined,
+              discount: hasDiscount ? `${Math.round((((original as number) - price) / (original as number)) * 100)}% OFF` : undefined,
+              image_url: p.featured_image_url || p.product_images?.[0]?.image_url || '',
               badge: p.badge || undefined,
               rating: Number(p.rating) || 0,
               review_count: Number(p.review_count) || 0,
-              sizes: ['S', 'M', 'L', 'XL'],
-              in_stock: true,
+              sizes: Array.from(new Set(activeVariants.map((v: any) => v.variant_name).filter(Boolean))),
+              in_stock: activeVariants.some((v: any) => (v.stock_quantity || 0) > 0),
               is_active: true,
-              colors: [],
               color_name: p.color_name,
               product_images: p.product_images,
               gallery_images: (p.product_images || []).map((img: any) => img.image_url),
@@ -321,15 +317,7 @@ export default function CustomerAccountView({
           }
         })
 
-        // 2. Check static SHOP_PRODUCTS catalog
-        SHOP_PRODUCTS.forEach((p) => {
-          if (activeMap[p.id] && !foundIds.has(p.id)) {
-            list.push(p)
-            foundIds.add(p.id)
-          }
-        })
-
-        // 3. Check DB products
+        // 2. Check live DB products
         dbProducts.forEach((p) => {
           if (activeMap[p.id] && !foundIds.has(p.id)) {
             list.push(p)
@@ -377,16 +365,6 @@ export default function CustomerAccountView({
     }
   }
 
-  // Auto-select first order for live tracking preview once on initial mount
-  useEffect(() => {
-    if (!hasInitializedTrackingRef.current && orders.length > 0) {
-      hasInitializedTrackingRef.current = true
-      setActiveTrackedOrder(orders[0])
-      setTrackingInput(orders[0].order_number)
-      setLastTrackingSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
-    }
-  }, [orders])
-
   // Supabase Real-time updates subscription for current user
   useEffect(() => {
     if (!user?.id) return
@@ -403,14 +381,6 @@ export default function CustomerAccountView({
             if (fresh.success && fresh.orders && fresh.orders.length > 0) {
               const freshOrders = fresh.orders as CustomerOrderData[]
               setOrders(freshOrders)
-              setActiveTrackedOrder((prev) => {
-                if (!prev) return null
-                const updated = freshOrders.find(
-                  (o) => o.id === prev.id || o.order_number.toLowerCase() === prev.order_number.toLowerCase()
-                )
-                return updated || prev
-              })
-              setLastTrackingSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
             }
           }
         )
@@ -472,120 +442,12 @@ export default function CustomerAccountView({
 
   // Helper date formatter
   const formatDate = (isoString?: string) => {
-    if (!isoString) return 'Recent'
+    if (!isoString) return '—'
     try {
       const d = new Date(isoString)
       return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
     } catch (e) {
       return isoString
-    }
-  }
-
-  // Handle Tracking Search
-  const handleTrackSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault()
-    const query = trackingInput.trim()
-    if (!query) {
-      setActiveTrackedOrder(null)
-      showToast('Please enter an order or tracking number', 'info')
-      return
-    }
-
-    setIsTrackingSearching(true)
-    setTrackingFeedback(null)
-
-    // Check local loaded orders first
-    const matchedLocal = orders.find(
-      (o) =>
-        o.order_number.toLowerCase() === query.toLowerCase() ||
-        o.order_number.toLowerCase().includes(query.toLowerCase()) ||
-        o.id === query ||
-        o.tracking_number?.toLowerCase() === query.toLowerCase() ||
-        o.tracking_number?.toLowerCase().includes(query.toLowerCase())
-    )
-
-    if (matchedLocal) {
-      setActiveTrackedOrder(matchedLocal)
-      setIsTrackingSearching(false)
-      setLastTrackingSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
-      showToast(`Showing live status for #${matchedLocal.order_number}`, 'success')
-      return
-    }
-
-    // Query Supabase backend
-    const res = await trackOrderAction(query)
-    setIsTrackingSearching(false)
-    if (res.success && res.order) {
-      setActiveTrackedOrder(res.order as CustomerOrderData)
-      setLastTrackingSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
-      showToast(`Order #${res.order.order_number} loaded!`, 'success')
-    } else {
-      setActiveTrackedOrder(null)
-      setTrackingFeedback(res.error || 'No matching order found. Please check your order or AWB number.')
-      showToast(res.error || 'Order not found', 'error')
-    }
-  }
-
-  // Handle Real-Time Live Refresh
-  const handleRefreshLiveTracking = async () => {
-    setIsRefreshingLive(true)
-    try {
-      // 1. Fetch fresh customer data from Supabase
-      const fresh = await getLiveCustomerData()
-      let updatedOrders = orders
-      if (fresh.success && fresh.orders && fresh.orders.length > 0) {
-        updatedOrders = fresh.orders as CustomerOrderData[]
-        setOrders(updatedOrders)
-      }
-
-      // 2. Refresh currently tracked order if any
-      const currentQuery = trackingInput.trim() || activeTrackedOrder?.order_number
-      if (currentQuery) {
-        const res = await trackOrderAction(currentQuery)
-        if (res.success && res.order) {
-          setActiveTrackedOrder(res.order as CustomerOrderData)
-          setTrackingFeedback(null)
-          showToast(`Live status synced for #${res.order.order_number}!`, 'success')
-        } else {
-          const found = updatedOrders.find(
-            (o) =>
-              o.order_number.toLowerCase() === currentQuery.toLowerCase() ||
-              o.order_number.toLowerCase().includes(currentQuery.toLowerCase()) ||
-              o.id === currentQuery ||
-              o.tracking_number?.toLowerCase() === currentQuery.toLowerCase() ||
-              o.tracking_number?.toLowerCase().includes(currentQuery.toLowerCase())
-          )
-          if (found) {
-            setActiveTrackedOrder(found)
-            setTrackingFeedback(null)
-            showToast(`Live status updated for #${found.order_number}!`, 'success')
-          }
-        }
-      } else {
-        showToast('Orders and tracking data refreshed in real time!', 'success')
-      }
-      setLastTrackingSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
-    } catch (err) {
-      console.error('Refresh tracking error:', err)
-      showToast('Live tracking updated', 'info')
-    } finally {
-      setIsRefreshingLive(false)
-    }
-  }
-
-  // Handle Clear Tracking Input
-  const handleClearTrackingInput = () => {
-    setTrackingInput('')
-    setActiveTrackedOrder(null)
-    setTrackingFeedback(null)
-  }
-
-  // Handle Tracking Input Change
-  const handleTrackingInputChange = (val: string) => {
-    setTrackingInput(val)
-    if (!val.trim()) {
-      setActiveTrackedOrder(null)
-      setTrackingFeedback(null)
     }
   }
 
@@ -596,17 +458,23 @@ export default function CustomerAccountView({
       return
     }
 
+    // Re-add every line with its real variant and quantity.
     order.order_items.forEach((item) => {
-      addToCart({
-        id: item.product_id || item.id,
-        name: item.product_name,
-        price: Number(item.price_at_purchase) || 1999,
-        image_url: item.image_url || '',
-        variant_name: item.variant_name || 'Standard',
-      })
+      addToCart(
+        {
+          id: item.product_id || item.id,
+          variant_id: item.variant_id,
+          name: item.product_name,
+          price: Number(item.price_at_purchase),
+          image_url: item.image_url || '',
+          variant_name: item.variant_name || undefined,
+        },
+        { quantity: item.quantity, skipFly: true }
+      )
     })
 
-    showToast(`Added ${order.order_items.length} item(s) to your bag!`, 'success')
+    const totalUnits = order.order_items.reduce((sum, item) => sum + (Number(item.quantity) || 1), 0)
+    showToast(`Added ${totalUnits} ${totalUnits === 1 ? 'item' : 'items'} to your bag!`, 'success')
     openCart()
   }
 
@@ -783,23 +651,10 @@ export default function CustomerAccountView({
   const navTabs = [
     { key: 'profile', label: 'My Profile', icon: User },
     { key: 'orders', label: 'My Orders', icon: Package },
-    { key: 'tracking', label: 'Order Tracking', icon: Truck },
     { key: 'wishlist', label: 'Wishlist', icon: Heart },
     { key: 'addresses', label: 'Addresses', icon: MapPin },
     { key: 'settings', label: 'Settings', icon: Settings },
   ] as const
-
-  // Stepper milestones for live order tracking
-  const currentOrderStatus = (activeTrackedOrder?.order_status || '').toLowerCase()
-  const isDelivered = currentOrderStatus === 'delivered'
-  const isInTransit =
-    isDelivered ||
-    currentOrderStatus === 'in transit' ||
-    currentOrderStatus === 'in_transit' ||
-    currentOrderStatus === 'out for delivery' ||
-    currentOrderStatus === 'out_for_delivery'
-  const isShipped = isInTransit || currentOrderStatus === 'shipped'
-  const isPlaced = !!activeTrackedOrder
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-[#111315] font-sans antialiased pb-20 selection:bg-pink selection:text-white">
@@ -949,7 +804,7 @@ export default function CustomerAccountView({
                     </div>
                     <div className="min-w-0 flex-1">
                       <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight font-sans truncate">
-                        Hello, {profile.full_name || user?.full_name || 'User'} 👋
+                        Hello{profile.full_name || user?.full_name ? `, ${profile.full_name || user?.full_name}` : ''} 👋
                       </h1>
                       <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1 font-normal leading-relaxed line-clamp-2">
                         Manage your orders, addresses, and account settings all in one place.
@@ -978,7 +833,7 @@ export default function CustomerAccountView({
 
                   {/* In Transit */}
                   <div
-                    onClick={() => setActiveTab('tracking')}
+                    onClick={() => setActiveTab('orders')}
                     className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-200/70 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.03)] flex items-center gap-3.5 hover:shadow-md transition-all cursor-pointer group"
                   >
                     <div className="w-12 h-12 rounded-[5px] bg-cyan-50 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
@@ -1042,7 +897,7 @@ export default function CustomerAccountView({
                       onClick={() => setActiveTab('orders')}
                       className="text-xs font-bold text-pink hover:text-[#d91668] flex items-center gap-1 transition-colors"
                     >
-                      View All →
+                      View All
                     </button>
                   </div>
 
@@ -1051,7 +906,7 @@ export default function CustomerAccountView({
                     {orders.length > 0 ? (
                       orders.slice(0, 3).map((order, idx) => {
                         const firstItem = order.order_items?.[0]
-                        const status = order.order_status?.toLowerCase() || 'delivered'
+                        const status = order.order_status?.toLowerCase() || 'pending'
                         const isItemDelivered = status === 'delivered'
                         const isItemInTransit =
                           status === 'shipped' ||
@@ -1068,19 +923,9 @@ export default function CustomerAccountView({
                             className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 p-3.5 sm:p-4 rounded-2xl border border-gray-100 hover:border-gray-200 hover:bg-gray-50/50 transition-all"
                           >
                             <div
-                              onClick={() => {
-                                const targetItem: CustomerOrderItem = firstItem || {
-                                  id: `item-${order.id}`,
-                                  product_name: `Order #${order.order_number}`,
-                                  price_at_purchase: order.total_amount,
-                                  quantity: 1,
-                                  line_total: order.total_amount,
-                                  image_url: itemThumb,
-                                }
-                                setSelectedProductItem({ item: targetItem, order })
-                              }}
+                              onClick={() => router.push(`/orders/${order.id}`)}
                               className="flex items-center gap-3.5 min-w-0 cursor-pointer group"
-                              title="Click to view product details"
+                              title="View order details & tracking"
                             >
                               <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-[5px] bg-gray-50 overflow-hidden relative shrink-0 border border-gray-100 group-hover:border-pink transition-colors flex items-center justify-center">
                                 {itemThumb ? (
@@ -1108,23 +953,40 @@ export default function CustomerAccountView({
                                 </p>
                                 <p className="text-[11px] sm:text-xs text-gray-500 font-medium">
                                   {firstItem?.variant_name ? `${firstItem.variant_name} • ` : ''}
-                                  {order.order_items?.length || 1}{' '}
-                                  {(order.order_items?.length || 1) === 1 ? 'item' : 'items'}
+                                  {(() => {
+                                    const units = (order.order_items || []).reduce(
+                                      (sum, item) => sum + (Number(item.quantity) || 1),
+                                      0
+                                    )
+                                    return `${units} ${units === 1 ? 'item' : 'items'}`
+                                  })()}
                                 </p>
                               </div>
                             </div>
 
                             <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 shrink-0 pt-2 sm:pt-0 border-t sm:border-0 border-gray-100">
                               {/* Status Badge */}
-                              {isItemInTransit ? (
-                                <span className="text-[11px] sm:text-xs font-semibold px-2.5 py-0.5 rounded-full bg-cyan-50 text-[#218D98] border border-cyan-100 flex items-center gap-1">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-[#36B8C5] animate-pulse" />
-                                  In Transit
-                                </span>
-                              ) : (
+                              {isItemDelivered ? (
                                 <span className="text-[11px] sm:text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center gap-1">
                                   <Check className="w-3 h-3" />
                                   Delivered
+                                </span>
+                              ) : status === 'cancelled' ? (
+                                <span className="text-[11px] sm:text-xs font-semibold px-2.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100">
+                                  Cancelled
+                                </span>
+                              ) : status === 'shipped' || status === 'in transit' || status === 'in_transit' || status === 'out for delivery' ? (
+                                <span className="text-[11px] sm:text-xs font-semibold px-2.5 py-0.5 rounded-full bg-cyan-50 text-[#218D98] border border-cyan-100 flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-[#36B8C5] animate-pulse" />
+                                  {status === 'shipped' ? 'Shipped' : 'In Transit'}
+                                </span>
+                              ) : status === 'processing' ? (
+                                <span className="text-[11px] sm:text-xs font-semibold px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-100">
+                                  Processing
+                                </span>
+                              ) : (
+                                <span className="text-[11px] sm:text-xs font-semibold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+                                  Order Placed
                                 </span>
                               )}
 
@@ -1134,25 +996,18 @@ export default function CustomerAccountView({
                               </span>
 
                               {/* Action Button */}
-                              {isItemDelivered ? (
+                              <Link
+                                href={`/orders/${order.id}`}
+                                className="bg-black hover:bg-pink text-white text-xs font-bold px-4 py-1.5 rounded-full transition-all whitespace-nowrap"
+                              >
+                                View Details
+                              </Link>
+                              {isItemDelivered && (
                                 <button
                                   onClick={() => handleBuyAgain(order)}
-                                  className="text-xs font-semibold text-pink border border-pink hover:bg-pink hover:text-white px-3.5 py-1.5 rounded-full transition-all shadow-2xs"
+                                  className="text-xs font-semibold text-pink border border-pink hover:bg-pink hover:text-white px-3.5 py-1.5 rounded-full transition-all shadow-2xs whitespace-nowrap"
                                 >
                                   Buy Again
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => {
-                                    setActiveTrackedOrder(order)
-                                    setTrackingInput(order.order_number)
-                                    setActiveTab('tracking')
-                                    showToast(`Opened live tracking for Order #${order.order_number}`, 'info')
-                                  }}
-                                  title="Track live status"
-                                  className="text-gray-400 hover:text-pink p-1.5 rounded-full hover:bg-pink-50 transition-colors"
-                                >
-                                  <ChevronRight className="w-4 h-4" />
                                 </button>
                               )}
                             </div>
@@ -1194,7 +1049,7 @@ export default function CustomerAccountView({
                           onClick={() => setActiveTab('addresses')}
                           className="text-xs font-bold text-pink hover:text-[#d91668] flex items-center gap-1 transition-colors"
                         >
-                          View All →
+                          View All
                         </button>
                       </div>
 
@@ -1349,6 +1204,12 @@ export default function CustomerAccountView({
                             <span className="text-base font-extrabold text-gray-900">
                               ₹{Number(order.total_amount).toLocaleString('en-IN')}
                             </span>
+                            <Link
+                              href={`/orders/${order.id}`}
+                              className="bg-black hover:bg-pink text-white text-xs font-bold px-4 py-1.5 rounded-full transition-all"
+                            >
+                              View Details
+                            </Link>
                             <button
                               onClick={() => handleBuyAgain(order)}
                               className="bg-pink hover:bg-[#d91668] text-white text-xs font-bold px-4 py-1.5 rounded-full transition-all shadow-pink"
@@ -1408,16 +1269,12 @@ export default function CustomerAccountView({
                               {order.courier_name && <span>Courier: <strong className="text-gray-800">{order.courier_name}</strong> | </span>}
                               {order.tracking_number && <span>Tracking: <strong className="text-gray-800">{order.tracking_number}</strong></span>}
                             </div>
-                            <button
-                              onClick={() => {
-                                setActiveTrackedOrder(order)
-                                setTrackingInput(order.order_number)
-                                setActiveTab('tracking')
-                              }}
+                            <Link
+                              href={`/orders/${order.id}`}
                               className="text-pink font-bold hover:underline"
                             >
-                              Live Tracking Stepper →
-                            </button>
+                              Live Tracking →
+                            </Link>
                           </div>
                         )}
                       </div>
@@ -1438,437 +1295,6 @@ export default function CustomerAccountView({
                     >
                       <ShoppingBag className="w-4 h-4" /> Start Shopping
                     </Link>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* TAB: ORDER TRACKING VIEW */}
-            {activeTab === 'tracking' && (
-              <div className="bg-white rounded-[5px] p-6 sm:p-8 border border-gray-200/70 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.04)] space-y-6">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl bg-cyan-50 flex items-center justify-center shrink-0">
-                      <Truck className="w-5 h-5 text-[#36B8C5]" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2.5">
-                        <h2 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
-                          Live Order Tracking
-                        </h2>
-                        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/70 px-2.5 py-0.5 rounded-full">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                          Live Real-Time Synced
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        Track live transit milestones, courier dispatches, and delivery status.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Sync status badge */}
-                  <div className="text-[11px] text-gray-500 font-semibold flex items-center gap-1.5 self-start sm:self-auto bg-gray-50 px-3 py-1.5 rounded-[5px] border border-gray-200/60">
-                    <Clock className="w-3.5 h-3.5 text-gray-400" />
-                    <span>Sync: {lastTrackingSyncTime}</span>
-                  </div>
-                </div>
-
-                {/* Search & Actions Bar */}
-                <form onSubmit={handleTrackSubmit} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 max-w-2xl">
-                  <div className="relative flex-1">
-                    <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <input
-                      type="text"
-                      value={trackingInput}
-                      onChange={(e) => handleTrackingInputChange(e.target.value)}
-                      placeholder="Enter order number (e.g. TZ45892) or AWB..."
-                      className="w-full pl-9 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-[5px] text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-pink focus:bg-white transition-all font-medium"
-                    />
-                    {trackingInput && (
-                      <button
-                        type="button"
-                        onClick={handleClearTrackingInput}
-                        title="Clear input"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-200/60 rounded-full transition-colors"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {/* Track Button */}
-                    <button
-                      type="submit"
-                      disabled={isTrackingSearching}
-                      className="flex-1 sm:flex-initial bg-pink hover:bg-[#D91668] text-white px-5 py-2.5 rounded-[5px] text-xs sm:text-sm font-bold shadow-pink transition-all shrink-0 flex items-center justify-center gap-1.5 disabled:opacity-50"
-                    >
-                      {isTrackingSearching ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Tracking...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Search className="w-3.5 h-3.5" />
-                          <span>Track</span>
-                        </>
-                      )}
-                    </button>
-
-                    {/* Refresh Button (Directly next to Track button) */}
-                    <button
-                      type="button"
-                      onClick={handleRefreshLiveTracking}
-                      disabled={isRefreshingLive}
-                      title="Refresh live order tracking status from Supabase"
-                      className="px-3.5 py-2.5 rounded-[5px] text-xs sm:text-sm font-bold bg-white border border-gray-200 text-gray-700 hover:text-pink hover:border-pink/40 hover:bg-pink-50/50 shadow-2xs transition-all shrink-0 flex items-center justify-center gap-1.5 disabled:opacity-60"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingLive ? 'animate-spin text-pink' : 'text-gray-600'}`} />
-                      <span className="hidden sm:inline">Refresh</span>
-                    </button>
-                  </div>
-                </form>
-
-                {/* Error or Alert Feedback */}
-                {trackingFeedback && (
-                  <div className="p-3.5 rounded-[5px] bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
-                    <span>{trackingFeedback}</span>
-                  </div>
-                )}
-
-                {/* EMPTY / CLEARED STATE: Please enter your tracking number (Compact & Responsive) */}
-                {(!trackingInput.trim() || !activeTrackedOrder) && (
-                  <div className="rounded-2xl border border-dashed border-gray-200 bg-gradient-to-b from-gray-50/60 to-white py-5 px-4 sm:py-6 sm:px-6 text-center space-y-3.5">
-                    {/* Compact Icon */}
-                    <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-[5px] bg-pink-50 border border-pink/20 flex items-center justify-center text-pink shadow-2xs mx-auto">
-                      <Truck className="w-5 h-5 text-pink" />
-                    </div>
-
-                    {/* Prompt Text (Shortened & Clear) */}
-                    <div className="max-w-md mx-auto space-y-1">
-                      <h3 className="text-sm sm:text-base font-bold text-gray-900 tracking-tight">
-                        Please enter your tracking number
-                      </h3>
-                      <p className="text-xs text-gray-500 leading-relaxed">
-                        Enter your TeenZos Order ID (e.g. <span className="font-semibold text-gray-700">TZ45892</span>) or Courier AWB code in the search bar above to see live updates.
-                      </p>
-                    </div>
-
-                    {/* Quick Select from Orders (Compact) */}
-                    {orders.length > 0 && (
-                      <div className="pt-1 max-w-xl mx-auto space-y-2">
-                        <div className="flex items-center justify-center gap-2">
-                          <div className="h-px bg-gray-200 flex-1" />
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                            Or track one of your orders
-                          </span>
-                          <div className="h-px bg-gray-200 flex-1" />
-                        </div>
-
-                        <div className="flex flex-wrap items-center justify-center gap-1.5">
-                          {orders.slice(0, 4).map((o) => {
-                            const status = (o.order_status || 'Delivered').toLowerCase()
-                            const isDeliv = status === 'delivered'
-                            const isTransit = status === 'in transit' || status === 'in_transit' || status === 'shipped'
-
-                            return (
-                              <button
-                                key={o.id || o.order_number}
-                                type="button"
-                                onClick={() => {
-                                  setTrackingInput(o.order_number)
-                                  setActiveTrackedOrder(o)
-                                  setTrackingFeedback(null)
-                                  setLastTrackingSyncTime(
-                                    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                  )
-                                  showToast(`Loaded live tracking for #${o.order_number}`, 'success')
-                                }}
-                                className="group inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-gray-200 hover:border-pink hover:bg-pink-50/40 text-xs font-semibold text-gray-700 hover:text-pink transition-all shadow-2xs"
-                              >
-                                <Package className="w-3 h-3 text-gray-400 group-hover:text-pink" />
-                                <span>#{o.order_number}</span>
-                                <span
-                                  className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
-                                    isDeliv
-                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
-                                      : isTransit
-                                      ? 'bg-cyan-50 text-[#218D98] border border-cyan-200/60'
-                                      : 'bg-amber-50 text-amber-700 border border-amber-200/60'
-                                  }`}
-                                >
-                                  {o.order_status}
-                                </span>
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Real-time Feature highlights (Compact, Short & Responsive) */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 max-w-xl mx-auto pt-1">
-                      <div className="p-2 sm:p-2.5 rounded-[5px] bg-white border border-gray-100 shadow-2xs flex items-center gap-2.5 text-left">
-                        <div className="w-7 h-7 rounded-lg bg-pink-50 flex items-center justify-center shrink-0">
-                          <Sparkles className="w-3.5 h-3.5 text-pink" />
-                        </div>
-                        <div className="min-w-0">
-                          <h4 className="text-xs font-bold text-gray-900 leading-tight">Real-Time Sync</h4>
-                          <p className="text-[10px] text-gray-400 mt-0.5 truncate">Instant Supabase live sync</p>
-                        </div>
-                      </div>
-
-                      <div className="p-2 sm:p-2.5 rounded-[5px] bg-white border border-gray-100 shadow-2xs flex items-center gap-2.5 text-left">
-                        <div className="w-7 h-7 rounded-lg bg-cyan-50 flex items-center justify-center shrink-0">
-                          <Truck className="w-3.5 h-3.5 text-[#36B8C5]" />
-                        </div>
-                        <div className="min-w-0">
-                          <h4 className="text-xs font-bold text-gray-900 leading-tight">Courier Tracking</h4>
-                          <p className="text-[10px] text-gray-400 mt-0.5 truncate">Live AWB route scans</p>
-                        </div>
-                      </div>
-
-                      <div className="p-2 sm:p-2.5 rounded-[5px] bg-white border border-gray-100 shadow-2xs flex items-center gap-2.5 text-left">
-                        <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
-                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                        </div>
-                        <div className="min-w-0">
-                          <h4 className="text-xs font-bold text-gray-900 leading-tight">Verified Delivery</h4>
-                          <p className="text-[10px] text-gray-400 mt-0.5 truncate">OTP check & safe drop</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* ACTIVE TRACKED ORDER VIEW */}
-                {activeTrackedOrder && (
-                  <div className="space-y-6 pt-2">
-                    {/* Order Details Header Card */}
-                    <div className="border border-gray-200/80 rounded-2xl p-5 sm:p-6 bg-gray-50/60 flex flex-wrap items-center justify-between gap-4">
-                      <div className="space-y-1">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Order Number</span>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-lg sm:text-xl font-black text-gray-900">
-                            #{activeTrackedOrder.order_number}
-                          </h3>
-                          <span
-                            className={`text-xs font-bold px-2.5 py-0.5 rounded-full capitalize ${
-                              isDelivered
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                : isInTransit
-                                ? 'bg-cyan-100 text-cyan-800 border border-cyan-200'
-                                : 'bg-pink-100 text-pink border border-pink/30'
-                            }`}
-                          >
-                            {activeTrackedOrder.order_status}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Carrier / Courier</span>
-                        <div className="text-sm font-bold text-gray-900">
-                          {activeTrackedOrder.courier_name || 'TeenZos Express Logistics'}
-                        </div>
-                      </div>
-
-                      <div>
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Tracking Code</span>
-                        <div className="text-sm font-mono font-bold text-gray-900 bg-white px-2.5 py-1 rounded-lg border border-gray-200 inline-block">
-                          {activeTrackedOrder.tracking_number || `TZ-AWB-${activeTrackedOrder.order_number}`}
-                        </div>
-                      </div>
-
-                      <div>
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Order Total</span>
-                        <div className="text-sm font-black text-gray-900">
-                          ₹{Number(activeTrackedOrder.total_amount).toLocaleString('en-IN')}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Stepper Progress Bar */}
-                    <div className="py-4">
-                      <div className="relative flex items-center justify-between max-w-3xl mx-auto px-4 sm:px-8">
-                        {/* Connecting Line */}
-                        <div className="absolute left-8 right-8 top-4 -translate-y-1/2 h-1 bg-gray-200 z-0">
-                          <div
-                            className="h-full bg-pink transition-all duration-500"
-                            style={{
-                              width: isDelivered ? '100%' : isInTransit ? '66%' : isShipped ? '33%' : '0%',
-                            }}
-                          />
-                        </div>
-
-                        {/* Step 1: Placed */}
-                        <div className="relative z-10 flex flex-col items-center">
-                          <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
-                              isPlaced
-                                ? 'bg-pink border-pink text-white shadow-pink'
-                                : 'bg-white border-gray-300 text-gray-400'
-                            }`}
-                          >
-                            <Check className="w-4 h-4 stroke-[3]" />
-                          </div>
-                          <span className="text-[11px] font-bold text-gray-900 mt-2 text-center whitespace-nowrap">
-                            Order Placed
-                          </span>
-                          <span className="text-[10px] text-gray-400 mt-0.5">
-                            {formatDate(activeTrackedOrder?.created_at).slice(0, 6)}
-                          </span>
-                        </div>
-
-                        {/* Step 2: Shipped */}
-                        <div className="relative z-10 flex flex-col items-center">
-                          <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
-                              isShipped
-                                ? 'bg-pink border-pink text-white shadow-pink'
-                                : 'bg-white border-gray-300 text-gray-400'
-                            }`}
-                          >
-                            <Truck className="w-4 h-4" />
-                          </div>
-                          <span className="text-[11px] font-bold text-gray-900 mt-2 text-center whitespace-nowrap">
-                            Shipped
-                          </span>
-                          <span className="text-[10px] text-gray-400 mt-0.5">
-                            {activeTrackedOrder?.shipped_at
-                              ? formatDate(activeTrackedOrder.shipped_at).slice(0, 6)
-                              : 'In Process'}
-                          </span>
-                        </div>
-
-                        {/* Step 3: In Transit */}
-                        <div className="relative z-10 flex flex-col items-center">
-                          <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
-                              isInTransit
-                                ? 'bg-pink border-pink text-white shadow-pink'
-                                : 'bg-white border-gray-300 text-gray-400'
-                            }`}
-                          >
-                            <Package className="w-4 h-4" />
-                          </div>
-                          <span className="text-[11px] font-bold text-gray-900 mt-2 text-center whitespace-nowrap">
-                            In Transit
-                          </span>
-                          <span className="text-[10px] text-gray-400 mt-0.5">
-                            {activeTrackedOrder?.courier_name ? 'On Route' : 'Pending'}
-                          </span>
-                        </div>
-
-                        {/* Step 4: Delivered */}
-                        <div className="relative z-10 flex flex-col items-center">
-                          <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
-                              isDelivered
-                                ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm'
-                                : 'bg-white border-gray-300 text-gray-400'
-                            }`}
-                          >
-                            <Check className="w-4 h-4 stroke-[3]" />
-                          </div>
-                          <span className="text-[11px] font-bold text-gray-900 mt-2 text-center whitespace-nowrap">
-                            Delivered
-                          </span>
-                          <span className="text-[10px] text-gray-400 mt-0.5">
-                            {activeTrackedOrder?.delivered_at
-                              ? formatDate(activeTrackedOrder.delivered_at).slice(0, 6)
-                              : 'Pending'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Live Carrier Details Badge */}
-                    <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-gray-400 font-medium">Tracking Code:</span>
-                        <strong className="text-gray-900 font-bold bg-white px-2.5 py-1 rounded-lg border border-gray-200">
-                          {activeTrackedOrder.tracking_number || `TZ-AWB-${activeTrackedOrder.order_number}`}
-                        </strong>
-                        {activeTrackedOrder.courier_name && (
-                          <span className="text-gray-500">via {activeTrackedOrder.courier_name}</span>
-                        )}
-                      </div>
-
-                      {activeTrackedOrder.tracking_url ? (
-                        <a
-                          href={activeTrackedOrder.tracking_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-pink hover:underline font-bold flex items-center gap-1 self-start sm:self-auto"
-                        >
-                          View Carrier Website <ExternalLink className="w-3 h-3" />
-                        </a>
-                      ) : (
-                        <span className="text-emerald-600 font-bold flex items-center gap-1.5 self-start sm:self-auto">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" /> Live Tracking Active
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Items in this order */}
-                    {activeTrackedOrder.order_items && activeTrackedOrder.order_items.length > 0 && (
-                      <div className="border border-gray-100 rounded-2xl p-4 bg-white space-y-3">
-                        <div className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-                          Package Contents ({activeTrackedOrder.order_items.length} items)
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {activeTrackedOrder.order_items.map((item) => (
-                            <div key={item.id} className="flex items-center gap-3 p-2.5 rounded-[5px] bg-gray-50 border border-gray-100">
-                              <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden relative shrink-0 flex items-center justify-center border border-gray-200/50">
-                                {item.image_url ? (
-                                  <Image
-                                    src={item.image_url}
-                                    alt={item.product_name}
-                                    fill
-                                    className="object-cover"
-                                  />
-                                ) : (
-                                  <Package className="w-5 h-5 text-gray-300" />
-                                )}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <h4 className="text-xs font-bold text-gray-900 truncate">{item.product_name}</h4>
-                                <p className="text-[11px] text-gray-500">
-                                  {item.variant_name || 'Standard'} × {item.quantity}
-                                </p>
-                              </div>
-                              <span className="text-xs font-bold text-gray-900 shrink-0">
-                                ₹{Number(item.line_total).toLocaleString('en-IN')}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Footer Actions */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                      <button
-                        type="button"
-                        onClick={handleClearTrackingInput}
-                        className="text-xs font-semibold text-gray-500 hover:text-pink transition-colors flex items-center gap-1"
-                      >
-                        ← Track another order
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('orders')}
-                        className="text-xs font-bold text-pink hover:underline"
-                      >
-                        View all purchases in My Orders →
-                      </button>
-                    </div>
                   </div>
                 )}
               </div>
@@ -2428,7 +1854,7 @@ export default function CustomerAccountView({
                         : 'bg-cyan-50 text-[#218D98] border border-cyan-200'
                     }`}
                   >
-                    {selectedProductItem.order.order_status || 'Confirmed'}
+                    {selectedProductItem.order.order_status || '—'}
                   </span>
                 </div>
                 <h3 className="text-base font-bold text-gray-900 pt-1">Product Information</h3>
@@ -2498,7 +1924,8 @@ export default function CustomerAccountView({
               <div className="p-2.5 rounded-[5px] bg-gray-50/70 border border-gray-100">
                 <span className="text-[10px] text-gray-400 font-semibold uppercase block">Payment Status</span>
                 <span className="font-semibold text-emerald-600 text-[11px] capitalize block truncate">
-                  {selectedProductItem.order.payment_status || 'Paid'} ({selectedProductItem.order.payment_method || 'Online'})
+                  {selectedProductItem.order.payment_status || '—'}
+                  {selectedProductItem.order.payment_method ? ` (${selectedProductItem.order.payment_method})` : ''}
                 </span>
               </div>
             </div>
@@ -2541,20 +1968,14 @@ export default function CustomerAccountView({
                 Buy Again
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  const targetOrder = selectedProductItem.order
-                  setSelectedProductItem(null)
-                  setActiveTrackedOrder(targetOrder)
-                  setTrackingInput(targetOrder.order_number)
-                  setActiveTab('tracking')
-                }}
+              <Link
+                href={`/orders/${selectedProductItem.order.id}`}
+                onClick={() => setSelectedProductItem(null)}
                 className="w-full sm:flex-1 py-2.5 px-4 border border-gray-200 hover:border-gray-400 text-gray-800 bg-white hover:bg-gray-50 rounded-[5px] text-xs font-bold transition-all flex items-center justify-center gap-1.5"
               >
                 <Truck className="w-3.5 h-3.5 text-gray-500" />
                 Track Order
-              </button>
+              </Link>
             </div>
           </div>
         </div>

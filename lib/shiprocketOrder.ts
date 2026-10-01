@@ -3,10 +3,15 @@ import {
   createShiprocketOrder,
   getDefaultShiprocketParcel,
   getShiprocketConfig,
+  getShiprocketOrderStatus,
   getShiprocketTrackingUrl,
+  mapShiprocketStatusToOrderStatus,
   requestShiprocketPickup,
+  trackShipmentByAwb,
   type ShiprocketParcel,
+  type ShiprocketScanEvent,
 } from '@/lib/shiprocket'
+import { estimateParcelWeightKg } from '@/lib/shiprocket-constants'
 
 export type ShiprocketOrderActionResult = {
   success: boolean
@@ -170,7 +175,19 @@ export async function createShiprocketShipmentForOrder(
       return { success: false, error: 'Prepaid orders must be paid before creating a shipment' }
     }
 
-    const parcel = buildParcel(parcelInput)
+    // Weight: prefer what the admin typed (actual packed weight); otherwise
+    // estimate per unit. Shiprocket rejects a zero/near-zero weight.
+    let weight = Number(parcelInput?.weight) > 0 ? Number(parcelInput?.weight) : 0
+    if (!weight) {
+      const units = (order.order_items || []).reduce(
+        (sum: number, item: any) => sum + Math.max(1, Number(item.quantity) || 1),
+        0
+      )
+      weight = estimateParcelWeightKg(units)
+    }
+    weight = Math.max(0.1, Math.round(weight * 100) / 100)
+
+    const parcel = buildParcel({ ...parcelInput, weight })
     const response = await createShiprocketOrder(buildShiprocketPayload(order, parcel))
 
     if (!response.order_id || !response.shipment_id) {
@@ -322,4 +339,104 @@ export async function tryCreateShiprocketShipmentAndAssignAwbForOrder(adminClien
   }
 
   return result
+}
+
+const FINAL_ORDER_STATUSES = new Set(['delivered', 'cancelled'])
+
+// Turns a Shiprocket shipment status into the orders-table update it implies.
+// Shared by the webhook (push) and the admin sync (pull). Webhooks can arrive
+// out of order or be retried, so an order already delivered/cancelled is never
+// pulled back to "shipped".
+export function buildShiprocketStatusUpdate(
+  currentOrderStatus: string,
+  shiprocketStatus: string | null | undefined
+) {
+  const update: Record<string, any> = {}
+  if (shiprocketStatus) update.shipment_notes = `Shiprocket status: ${shiprocketStatus}`
+
+  const mappedStatus = mapShiprocketStatusToOrderStatus(shiprocketStatus)
+  if (mappedStatus && mappedStatus !== currentOrderStatus) {
+    const isRegression = FINAL_ORDER_STATUSES.has(currentOrderStatus) && mappedStatus === 'shipped'
+    if (!isRegression) {
+      const now = new Date().toISOString()
+      update.order_status = mappedStatus
+      if (mappedStatus === 'shipped') update.shipped_at = now
+      if (mappedStatus === 'delivered') update.delivered_at = now
+      if (mappedStatus === 'cancelled') update.cancelled_at = now
+    }
+  }
+
+  return { update, mappedStatus }
+}
+
+export type ShiprocketSyncResult =
+  | {
+      success: true
+      shiprocketStatus: string | null
+      courierName: string | null
+      currentLocation: string | null
+      scans: ShiprocketScanEvent[]
+    }
+  | { success: false; error: string }
+
+// Fetches this order's live status from Shiprocket and writes it to the DB.
+// Works at every stage: with an AWB it pulls full tracking (location + scan
+// timeline); without one it asks Shiprocket for the order itself, and if a
+// courier was picked in Shiprocket's dashboard it discovers and saves the AWB.
+export async function syncOrderFromShiprocket(adminClient: any, orderId: string): Promise<ShiprocketSyncResult> {
+  try {
+    const { data: order, error } = await adminClient
+      .from('orders')
+      .select('id, order_status, shiprocket_order_id, shiprocket_awb_code')
+      .eq('id', orderId)
+      .single()
+
+    if (error || !order) return { success: false, error: error?.message || 'Order not found' }
+    if (!order.shiprocket_order_id && !order.shiprocket_awb_code) {
+      return { success: false, error: 'This order has not been sent to Shiprocket yet' }
+    }
+
+    let awbCode: string | null = order.shiprocket_awb_code || null
+    let currentStatus: string | null = null
+    let courierName: string | null = null
+    let currentLocation: string | null = null
+    let scans: ShiprocketScanEvent[] = []
+
+    if (!awbCode) {
+      const found = await getShiprocketOrderStatus(order.shiprocket_order_id)
+      currentStatus = found.currentStatus
+      courierName = found.courierName
+      awbCode = found.awbCode
+    }
+
+    if (awbCode) {
+      const tracked = await trackShipmentByAwb(awbCode)
+      if (tracked.currentStatus) currentStatus = tracked.currentStatus
+      if (tracked.courierName) courierName = tracked.courierName
+      currentLocation = tracked.currentLocation
+      scans = tracked.scans
+    }
+
+    const { update } = buildShiprocketStatusUpdate(order.order_status, currentStatus)
+    if (courierName) update.courier_name = courierName
+    if (awbCode && !order.shiprocket_awb_code) {
+      update.shiprocket_awb_code = awbCode
+      update.tracking_number = awbCode
+      update.tracking_url = getShiprocketTrackingUrl(awbCode)
+    }
+    update.updated_at = new Date().toISOString()
+
+    const { error: updateError } = await adminClient.from('orders').update(update).eq('id', order.id)
+    if (updateError) return { success: false, error: updateError.message }
+
+    return {
+      success: true,
+      shiprocketStatus: currentStatus,
+      courierName,
+      currentLocation,
+      scans,
+    }
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to sync status from Shiprocket' }
+  }
 }

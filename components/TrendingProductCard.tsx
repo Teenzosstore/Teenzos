@@ -205,6 +205,8 @@ export interface TrendingProductCardProps {
   isLiked?: boolean;
   isWishlisted?: boolean;
   onToggleWishlist?: (id: string) => void;
+  // "large": editorial look for the homepage — tall full-bleed image, minimal text.
+  variant?: "default" | "large";
 }
 
 export default function TrendingProductCard({
@@ -212,7 +214,9 @@ export default function TrendingProductCard({
   isLiked = false,
   isWishlisted = false,
   onToggleWishlist,
+  variant = "default",
 }: TrendingProductCardProps) {
+  const isLarge = variant === "large";
   const [selectedColorIdx, setSelectedColorIdx] = useState(0);
   const [isAdded, setIsAdded] = useState(false);
   const { addToCart } = useCart();
@@ -350,22 +354,53 @@ export default function TrendingProductCard({
   };
 
   return (
-    <div className="group relative flex flex-col justify-between bg-white rounded-[5px] border border-stone-200/90 p-2.5 sm:p-3 hover:border-stone-400 hover:shadow-xl transition-all duration-300 w-full h-full">
-      {/* ── Image Box with rounded-[5px] ── */}
-      <div className="relative aspect-[4.3/4.3] w-full rounded-[5px] bg-[#F7F7F5] border border-stone-200/60 overflow-hidden mb-2.5 sm:mb-3 flex items-center justify-center">
-        <Link href={productHref} className="block relative w-full h-full">
-          <Image
-            key={activeImage}
-            src={activeImage}
-            alt={`${product.name} - ${resolvedColors[selectedColorIdx]?.name || ""}`}
-            fill
-            loader={productLoaderFor(activeImage)}
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-            className="object-contain object-center transform group-hover:scale-105 transition-all duration-300 ease-out"
-            onError={(e) => {
-              e.currentTarget.src = "/image.png";
-            }}
-          />
+    <div
+      className={
+        isLarge
+          ? "group relative flex flex-col w-full h-full"
+          : "group relative flex flex-col justify-between bg-white rounded-[5px] border border-stone-200/90 p-2.5 sm:p-3 hover:border-stone-400 hover:shadow-xl transition-all duration-300 w-full h-full"
+      }
+    >
+      {/* ── Image Box ── */}
+      <div
+        className={
+          isLarge
+            ? "relative w-full min-h-[240px] rounded-2xl bg-[#F1F1EF] overflow-hidden mb-3"
+            : "relative aspect-[4/5] w-full rounded-[5px] bg-[#F7F7F5] border border-stone-200/60 overflow-hidden mb-2.5 sm:mb-3 flex items-center justify-center"
+        }
+      >
+        <Link href={productHref} className={isLarge ? "block w-full" : "block relative w-full h-full"}>
+          {isLarge ? (
+            // Natural aspect ratio: the whole photo is always visible (never
+            // cropped) and fills the full card width with no empty bands.
+            <Image
+              key={activeImage}
+              src={activeImage}
+              alt={`${product.name} - ${resolvedColors[selectedColorIdx]?.name || ""}`}
+              width={0}
+              height={0}
+              loader={productLoaderFor(activeImage)}
+              sizes="(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 25vw"
+              style={{ width: "100%", height: "auto" }}
+              className="block transform group-hover:scale-105 transition-all duration-300 ease-out"
+              onError={(e) => {
+                e.currentTarget.src = "/image.png";
+              }}
+            />
+          ) : (
+            <Image
+              key={activeImage}
+              src={activeImage}
+              alt={`${product.name} - ${resolvedColors[selectedColorIdx]?.name || ""}`}
+              fill
+              loader={productLoaderFor(activeImage)}
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+              className="object-cover object-center transform group-hover:scale-105 transition-all duration-300 ease-out"
+              onError={(e) => {
+                e.currentTarget.src = "/image.png";
+              }}
+            />
+          )}
         </Link>
 
         {/* Badge (if product has one) */}
@@ -422,7 +457,7 @@ export default function TrendingProductCard({
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#F72585]">
               {product.category_name || "Streetwear"}
             </span>
-            <div className="flex items-center gap-1 shrink-0">
+            <div className={`${isLarge ? "hidden" : "flex"} items-center gap-1 shrink-0`}>
               <div className="flex items-center gap-0.5">
                 {[...Array(5)].map((_, i) => {
                   const cardReviewCount = Number(product.review_count) || 0;
@@ -448,7 +483,7 @@ export default function TrendingProductCard({
           {/* Name */}
           <Link
             href={productHref}
-            className="font-body font-semibold text-[#0B0D0E] text-[13px] sm:text-[14px] md:text-[14.5px] leading-snug line-clamp-1 hover:text-[#F72585] transition-colors"
+            className={`font-body font-semibold text-[#0B0D0E] text-[13px] sm:text-[14px] md:text-[14.5px] leading-snug hover:text-[#F72585] transition-colors ${isLarge ? "line-clamp-2" : "line-clamp-1"}`}
           >
             {product.name}
           </Link>
@@ -470,7 +505,7 @@ export default function TrendingProductCard({
         </div>
 
         {/* Bottom Row: Color Swatches + Add to Cart Button */}
-        <div className="flex items-center justify-between pt-2 border-t border-stone-100 mt-auto gap-2">
+        <div className={`flex items-center justify-between pt-2 mt-auto gap-2 ${isLarge ? "" : "border-t border-stone-100"}`}>
           {/* Color Swatches */}
           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
             {resolvedColors.map((colorObj, cIdx) => {
