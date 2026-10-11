@@ -30,7 +30,7 @@ type ProductDetailActionsProps = {
     colors: { name: string; hex: string }[]
     variants: ProductVariant[]
     sizeChart?: {
-      imageUrl: string
+      imageUrls: string[]
       title: string
     } | null
   }
@@ -403,7 +403,7 @@ export default function ProductDetailActions({
               <span className="text-gray-950 font-bold">{selectedColor || product.colors[0]?.name}</span>
             </div>
 
-            {product.sizeChart?.imageUrl && (
+            {product.sizeChart?.imageUrls?.length ? (
               <button
                 type="button"
                 onClick={() => setShowSizeChart(true)}
@@ -412,7 +412,7 @@ export default function ProductDetailActions({
                 <Ruler className="w-3.5 h-3.5 text-[#FF007A]" />
                 <span>Size Guide</span>
               </button>
-            )}
+            ) : null}
           </div>
 
           <div className="flex items-center gap-3">
@@ -439,7 +439,7 @@ export default function ProductDetailActions({
             })}
           </div>
         </div>
-      ) : product.sizeChart?.imageUrl ? (
+      ) : product.sizeChart?.imageUrls?.length ? (
         <div className="flex justify-end">
           <button
             type="button"
@@ -591,14 +591,14 @@ export default function ProductDetailActions({
       </div>
 
       {/* Size Chart Popup */}
-      {product.sizeChart?.imageUrl && (
+      {product.sizeChart?.imageUrls?.length ? (
         <SizeChartPopup
           isOpen={showSizeChart}
           onClose={() => setShowSizeChart(false)}
-          imageUrl={product.sizeChart.imageUrl}
+          imageUrls={product.sizeChart.imageUrls}
           title={product.sizeChart.title || 'TeenZos Size Chart'}
         />
-      )}
+      ) : null}
     </div>
   )
 }

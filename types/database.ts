@@ -73,6 +73,9 @@ export interface Product {
   use_global_size_chart: boolean
   size_chart_image_url: string | null
   size_chart_cloudinary_public_id: string | null
+  size_chart_image_urls: string[] | null
+  size_chart_cloudinary_public_ids: string[] | null
+  size_chart_id: string | null
   created_at: string
   updated_at: string
 }
@@ -215,6 +218,8 @@ export interface SizeChart {
   name: string
   image_url: string
   cloudinary_public_id: string | null
+  image_urls: string[] | null
+  cloudinary_public_ids: string[] | null
   is_global: boolean
   is_active: boolean
   created_at: string

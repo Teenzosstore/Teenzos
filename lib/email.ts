@@ -463,7 +463,7 @@ export async function sendNewsletterCampaignEmail({
         <tr>
           <td align="center">
             <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 520px; background-color: #121417; border-radius: 16px; border: 1px solid #23272d; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.6);">
-              
+
               <!-- Brand Header -->
               <tr>
                 <td style="padding: 32px 32px 20px; text-align: center; border-bottom: 1px solid #1f2329;">

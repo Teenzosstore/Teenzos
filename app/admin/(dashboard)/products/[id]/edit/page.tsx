@@ -1,8 +1,7 @@
 import { requireAdmin } from '@/lib/adminAuth'
 import { notFound, redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import AdminShell from '@/components/admin/AdminShell'
-import ProductEditSections from '../../../(dashboard)/products/_components/ProductEditSections'
+import ProductEditSections from '../../_components/ProductEditSections'
 
 export const metadata: Metadata = {
   title: 'Edit Product',
@@ -58,18 +57,16 @@ export default async function EditProductPage({
   }
 
   return (
-    <AdminShell>
-      <div className="w-full space-y-5">
-        <ProductEditSections
-          product={productRes.data}
-          categories={categoriesRes.data || []}
-          otherProducts={otherProductsRes.data || []}
-          information={infoRes.data || []}
-          variants={variantsRes.data || []}
-          images={imagesRes.data || []}
-          initialJustCreated={isJustCreated}
-        />
-      </div>
-    </AdminShell>
+    <div className="w-full space-y-5">
+      <ProductEditSections
+        product={productRes.data}
+        categories={categoriesRes.data || []}
+        otherProducts={otherProductsRes.data || []}
+        information={infoRes.data || []}
+        variants={variantsRes.data || []}
+        images={imagesRes.data || []}
+        initialJustCreated={isJustCreated}
+      />
+    </div>
   )
 }

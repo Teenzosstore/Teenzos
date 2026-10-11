@@ -3,8 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ChevronRight, Edit3, ArrowLeft, ExternalLink } from 'lucide-react'
-import AdminShell from '@/components/admin/AdminShell'
-import CategoryForm from '../../../(dashboard)/categories/_components/CategoryForm'
+import CategoryForm from '../../_components/CategoryForm'
 
 export const metadata: Metadata = {
   title: 'Edit Category | TeenZos Admin',
@@ -33,7 +32,6 @@ export default async function EditCategoryPage({
   }
 
   return (
-    <AdminShell>
       <div className="max-w-5xl mx-auto space-y-4 sm:space-y-5">
         {/* Header & Breadcrumb */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-cream-line/60">
@@ -97,6 +95,5 @@ export default async function EditCategoryPage({
         {/* Form */}
         <CategoryForm category={category} />
       </div>
-    </AdminShell>
   )
 }

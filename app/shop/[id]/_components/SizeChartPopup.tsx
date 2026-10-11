@@ -2,16 +2,17 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Image from 'next/image'
-import { X, Loader2, Maximize2, Minimize2 } from 'lucide-react'
+import { X, Loader2, Maximize2, Minimize2, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface SizeChartPopupProps {
   isOpen: boolean
   onClose: () => void
-  imageUrl: string
+  imageUrls: string[]
   title?: string
 }
 
-export default function SizeChartPopup({ isOpen, onClose, imageUrl, title = 'Size Chart' }: SizeChartPopupProps) {
+export default function SizeChartPopup({ isOpen, onClose, imageUrls, title = 'Size Chart' }: SizeChartPopupProps) {
+  const [currentIndex, setCurrentIndex] = useState(0)
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
   const [isZoomed, setIsZoomed] = useState(false)
@@ -24,6 +25,9 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrl, title = 'Siz
   const imageRef = useRef<HTMLImageElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
+
+  const hasMultiple = imageUrls.length > 1
+  const imageUrl = imageUrls[currentIndex] || imageUrls[0]
 
   const updateSize = useCallback(() => {
     const img = imageRef.current
@@ -65,9 +69,11 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrl, title = 'Siz
     setIsPanning(false)
   }, [])
 
+  // Reset to the first image and clear zoom state whenever the popup (re)opens.
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
+      setCurrentIndex(0)
     } else {
       resetZoom()
     }
@@ -76,28 +82,52 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrl, title = 'Siz
     }
   }, [isOpen, resetZoom])
 
+  // Switching images: reset zoom/pan and loading state for the new image.
+  const goToIndex = useCallback(
+    (index: number) => {
+      if (index < 0 || index >= imageUrls.length) return
+      resetZoom()
+      setImageLoaded(false)
+      setImageError(false)
+      setCurrentIndex(index)
+    },
+    [imageUrls.length, resetZoom]
+  )
+
+  const goPrev = useCallback(() => {
+    goToIndex((currentIndex - 1 + imageUrls.length) % imageUrls.length)
+  }, [currentIndex, imageUrls.length, goToIndex])
+
+  const goNext = useCallback(() => {
+    goToIndex((currentIndex + 1) % imageUrls.length)
+  }, [currentIndex, imageUrls.length, goToIndex])
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (!isOpen) return
+      if (e.key === 'Escape') {
         if (isZoomed) {
           resetZoom()
         } else {
           onClose()
         }
+      } else if (!isZoomed && hasMultiple) {
+        if (e.key === 'ArrowLeft') goPrev()
+        if (e.key === 'ArrowRight') goNext()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose, isZoomed, resetZoom])
+  }, [isOpen, onClose, isZoomed, resetZoom, hasMultiple, goPrev, goNext])
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (!isZoomed) return
     e.preventDefault()
-    
+
     const delta = e.deltaY > 0 ? -0.15 : 0.15
     const newZoom = Math.min(Math.max(zoomLevel + delta, 1), 4)
     setZoomLevel(newZoom)
-    
+
     if (newZoom <= 1) {
       setPanPosition({ x: 0, y: 0 })
       setIsZoomed(false)
@@ -145,14 +175,22 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrl, title = 'Siz
   }, [isPanning, panStart, zoomLevel, imageBox])
 
   // Touch handlers
+  const touchSwipeStartX = useRef<number | null>(null)
+
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (!isZoomed || zoomLevel <= 1) return
-    if (e.touches.length === 1) {
-      const touch = e.touches[0]
-      setIsPanning(true)
-      setPanStart({ x: touch.clientX - panPosition.x, y: touch.clientY - panPosition.y })
+    if (isZoomed && zoomLevel > 1) {
+      if (e.touches.length === 1) {
+        const touch = e.touches[0]
+        setIsPanning(true)
+        setPanStart({ x: touch.clientX - panPosition.x, y: touch.clientY - panPosition.y })
+      }
+      return
     }
-  }, [isZoomed, zoomLevel, panPosition])
+    // Not zoomed: track the touch for a swipe gesture between images.
+    if (hasMultiple && e.touches.length === 1) {
+      touchSwipeStartX.current = e.touches[0].clientX
+    }
+  }, [isZoomed, zoomLevel, panPosition, hasMultiple])
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!isPanning || e.touches.length !== 1) return
@@ -169,9 +207,22 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrl, title = 'Siz
     e.preventDefault()
   }, [isPanning, panStart, zoomLevel, imageBox])
 
-  const handleTouchEnd = useCallback(() => {
-    setIsPanning(false)
-  }, [])
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (isPanning) {
+      setIsPanning(false)
+      return
+    }
+    // Swipe-to-navigate when not zoomed.
+    if (hasMultiple && touchSwipeStartX.current !== null) {
+      const endX = e.changedTouches[0]?.clientX ?? touchSwipeStartX.current
+      const delta = endX - touchSwipeStartX.current
+      if (Math.abs(delta) > 50) {
+        if (delta < 0) goNext()
+        else goPrev()
+      }
+      touchSwipeStartX.current = null
+    }
+  }, [isPanning, hasMultiple, goNext, goPrev])
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -194,15 +245,15 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrl, title = 'Siz
     }
   }, [isZoomed, resetZoom])
 
-  if (!isOpen) return null
+  if (!isOpen || imageUrls.length === 0) return null
 
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm select-none" 
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm select-none"
       onClick={onClose}
       onDragStart={(e) => e.preventDefault()}
     >
-      <div 
+      <div
         ref={containerRef}
         className={`relative w-auto max-w-[92vw] sm:max-w-[480px] md:max-w-[500px] overflow-hidden transition-all duration-300 rounded-[5px] flex items-center justify-center select-none ${
           isZoomed ? 'fixed inset-0 max-w-full max-h-full z-[60] rounded-none' : ''
@@ -226,7 +277,7 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrl, title = 'Siz
               </button>
             </div>
           ) : (
-            <div 
+            <div
               ref={wrapperRef}
               className="relative inline-flex items-center justify-center max-w-full max-h-full select-none"
               onDragStart={(e) => e.preventDefault()}
@@ -237,9 +288,10 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrl, title = 'Siz
                 </div>
               )}
               <Image
+                key={imageUrl}
                 ref={imageRef}
                 src={imageUrl}
-                alt={title}
+                alt={hasMultiple ? `${title} (${currentIndex + 1}/${imageUrls.length})` : title}
                 width={1200}
                 height={800}
                 unoptimized={imageUrl?.startsWith('http')}
@@ -279,7 +331,7 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrl, title = 'Siz
               />
 
               {/* Top controls - Inside image: Expand/Zoom on LEFT, Close on RIGHT */}
-              <div 
+              <div
                 className={`absolute ${
                   isZoomed ? 'top-4 left-4 right-4 fixed z-50' : 'top-2 sm:top-2.5 left-2 sm:left-2.5 right-2 sm:right-2.5'
                 } flex items-start justify-between z-10 pointer-events-none`}
@@ -304,6 +356,51 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrl, title = 'Siz
                   </button>
                 </div>
               </div>
+
+              {/* Prev / Next controls (only when there are multiple images and not zoomed) */}
+              {hasMultiple && !isZoomed && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      goPrev()
+                    }}
+                    className="absolute left-0.5 sm:left-1 top-1/2 -translate-y-1/2 z-10 p-1 sm:p-1.5 bg-black/25 hover:bg-black/55 text-white rounded-full transition-colors shadow-sm cursor-pointer"
+                    aria-label="Previous image"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      goNext()
+                    }}
+                    className="absolute right-0.5 sm:right-1 top-1/2 -translate-y-1/2 z-10 p-1 sm:p-1.5 bg-black/25 hover:bg-black/55 text-white rounded-full transition-colors shadow-sm cursor-pointer"
+                    aria-label="Next image"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  </button>
+                </>
+              )}
+
+              {/* Dot indicators (only when there are multiple images and not zoomed) */}
+              {hasMultiple && !isZoomed && (
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm px-2.5 py-1.5 rounded-full pointer-events-auto">
+                  {imageUrls.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        goToIndex(idx)
+                      }}
+                      aria-label={`Go to image ${idx + 1}`}
+                      className={`rounded-full transition-all cursor-pointer ${
+                        idx === currentIndex ? 'w-4 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/50 hover:bg-white/80'
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
 
               {/* Zoom indicator */}
               {isZoomed && zoomLevel > 1 && (

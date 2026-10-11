@@ -255,12 +255,22 @@ export async function createProduct(
   const useGlobalSizeChart = formData.get('use_global_size_chart') === 'true'
   const sizeChartImageUrl = formData.get('size_chart_image_url') as string
   const sizeChartCloudinaryId = formData.get('size_chart_cloudinary_public_id') as string
+  const sizeChartId = (formData.get('size_chart_id') as string) || null
+  let sizeChartImageUrls: string[] = []
+  let sizeChartCloudinaryIds: string[] = []
+  try {
+    sizeChartImageUrls = JSON.parse((formData.get('size_chart_image_urls') as string) || '[]')
+    sizeChartCloudinaryIds = JSON.parse((formData.get('size_chart_cloudinary_public_ids') as string) || '[]')
+  } catch {}
 
   if (!name) {
     return { error: 'Product name is required' }
   }
   if (!price) {
     return { error: 'Base price is required' }
+  }
+  if (!useGlobalSizeChart && !sizeChartId && !sizeChartImageUrl) {
+    return { error: 'Pick a size chart from the library, upload a custom one, or choose Global/Disabled.' }
   }
 
   let featuresArray: string[] = []
@@ -308,8 +318,11 @@ export async function createProduct(
     is_featured: isFeatured,
     featured_image_url: imageUrl || null,
     use_global_size_chart: useGlobalSizeChart,
-    size_chart_image_url: useGlobalSizeChart ? null : (sizeChartImageUrl || null),
-    size_chart_cloudinary_public_id: useGlobalSizeChart ? null : (sizeChartCloudinaryId || null),
+    size_chart_id: useGlobalSizeChart ? null : sizeChartId,
+    size_chart_image_url: useGlobalSizeChart || sizeChartId ? null : (sizeChartImageUrl || null),
+    size_chart_cloudinary_public_id: useGlobalSizeChart || sizeChartId ? null : (sizeChartCloudinaryId || null),
+    size_chart_image_urls: useGlobalSizeChart || sizeChartId ? [] : sizeChartImageUrls,
+    size_chart_cloudinary_public_ids: useGlobalSizeChart || sizeChartId ? [] : sizeChartCloudinaryIds,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }).select('id').single()
@@ -405,12 +418,22 @@ export async function updateProduct(
   const useGlobalSizeChart = formData.get('use_global_size_chart') === 'true'
   const sizeChartImageUrl = formData.get('size_chart_image_url') as string
   const sizeChartCloudinaryId = formData.get('size_chart_cloudinary_public_id') as string
+  const sizeChartId = (formData.get('size_chart_id') as string) || null
+  let sizeChartImageUrls: string[] = []
+  let sizeChartCloudinaryIds: string[] = []
+  try {
+    sizeChartImageUrls = JSON.parse((formData.get('size_chart_image_urls') as string) || '[]')
+    sizeChartCloudinaryIds = JSON.parse((formData.get('size_chart_cloudinary_public_ids') as string) || '[]')
+  } catch {}
 
   if (!id || !name) {
     return { error: 'Product ID and name are required' }
   }
   if (!price) {
     return { error: 'Base price is required' }
+  }
+  if (!useGlobalSizeChart && !sizeChartId && !sizeChartImageUrl) {
+    return { error: 'Pick a size chart from the library, upload a custom one, or choose Global/Disabled.' }
   }
 
   let featuresArray: string[] = []
@@ -456,8 +479,11 @@ export async function updateProduct(
     is_featured: isFeatured,
     featured_image_url: imageUrl || null,
     use_global_size_chart: useGlobalSizeChart,
-    size_chart_image_url: useGlobalSizeChart ? null : (sizeChartImageUrl || null),
-    size_chart_cloudinary_public_id: useGlobalSizeChart ? null : (sizeChartCloudinaryId || null),
+    size_chart_id: useGlobalSizeChart ? null : sizeChartId,
+    size_chart_image_url: useGlobalSizeChart || sizeChartId ? null : (sizeChartImageUrl || null),
+    size_chart_cloudinary_public_id: useGlobalSizeChart || sizeChartId ? null : (sizeChartCloudinaryId || null),
+    size_chart_image_urls: useGlobalSizeChart || sizeChartId ? [] : sizeChartImageUrls,
+    size_chart_cloudinary_public_ids: useGlobalSizeChart || sizeChartId ? [] : sizeChartCloudinaryIds,
     updated_at: new Date().toISOString(),
   }
 

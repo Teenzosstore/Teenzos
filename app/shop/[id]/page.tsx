@@ -67,7 +67,7 @@ function renderProductPage(
   categoryName: string,
   similarProducts: any[],
   reviews: any[],
-  sizeChart: { imageUrl: string; title: string } | null,
+  sizeChart: { imageUrls: string[]; title: string } | null,
   currentUser?: { id: string; name?: string } | null
 ) {
   // Compile image array
@@ -245,7 +245,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   let sizeChart = null
   if (initialSizeChartResult.success && initialSizeChartResult.data) {
     sizeChart = {
-      imageUrl: initialSizeChartResult.data.image_url,
+      imageUrls: initialSizeChartResult.data.image_urls || [],
       title: initialSizeChartResult.data.name || 'Size Chart',
     }
   }
@@ -366,7 +366,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     const dbSizeChartResult = await getProductSizeChartPublic(productData.id)
     if (dbSizeChartResult.success && dbSizeChartResult.data) {
       sizeChart = {
-        imageUrl: dbSizeChartResult.data.image_url,
+        imageUrls: dbSizeChartResult.data.image_urls || [],
         title: dbSizeChartResult.data.name || 'Size Chart',
       }
     } else {

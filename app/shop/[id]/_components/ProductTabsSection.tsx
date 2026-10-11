@@ -24,7 +24,7 @@ type ProductTabsSectionProps = {
   specifications?: { label: string; value: string }[];
   reviews?: any[];
   sizeChart?: {
-    imageUrl: string;
+    imageUrls: string[];
     title: string;
   } | null;
   onOpenSizeChart?: () => void;
@@ -48,7 +48,7 @@ export default function ProductTabsSection({
   const [showSizeChartPopup, setShowSizeChartPopup] = useState(false);
   const [liveReviewCount, setLiveReviewCount] = useState<number>(reviews.length);
 
-  const hasSizeChart = Boolean(sizeChart?.imageUrl && sizeChart.imageUrl.trim() !== "");
+  const hasSizeChart = Boolean(sizeChart?.imageUrls && sizeChart.imageUrls.length > 0);
 
   React.useEffect(() => {
     if (!hasSizeChart && activeTab === "size") {
@@ -326,7 +326,7 @@ export default function ProductTabsSection({
                 >
                   <Image
                     src={
-                      sizeChart?.imageUrl ||
+                      sizeChart?.imageUrls?.[0] ||
                       "https://ik.imagekit.io/n6nsqvnx44/rawflex/size-charts/size-chart_6224wy2o3.png"
                     }
                     alt={sizeChart?.title || "Size Chart"}
@@ -342,6 +342,12 @@ export default function ProductTabsSection({
                       <span>Click to Preview & Zoom</span>
                     </div>
                   </div>
+
+                  {(sizeChart?.imageUrls?.length || 0) > 1 && (
+                    <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full pointer-events-none">
+                      1 / {sizeChart!.imageUrls.length}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -378,14 +384,14 @@ export default function ProductTabsSection({
             </div>
 
             {/* Size Chart Popup */}
-            {sizeChart?.imageUrl && (
+            {sizeChart?.imageUrls?.length ? (
               <SizeChartPopup
                 isOpen={showSizeChartPopup}
                 onClose={() => setShowSizeChartPopup(false)}
-                imageUrl={sizeChart.imageUrl}
+                imageUrls={sizeChart.imageUrls}
                 title={sizeChart.title || "TeenZos Size Chart"}
               />
-            )}
+            ) : null}
           </div>
         )}
 

@@ -12,6 +12,21 @@ export type ActionResult = {
   data?: any
 }
 
+// Resolves a size_charts row (or the legacy single-image shape) to a
+// guaranteed, non-empty `image_urls` array — handles rows written before the
+// multi-image migration, where only `image_url` was ever set.
+function withImageUrls<T extends { image_url?: string | null; image_urls?: string[] | null }>(
+  row: T
+): T & { image_urls: string[] } {
+  const image_urls =
+    row.image_urls && row.image_urls.length > 0
+      ? row.image_urls
+      : row.image_url
+      ? [row.image_url]
+      : []
+  return { ...row, image_urls }
+}
+
 export async function getGlobalSizeChart(): Promise<ActionResult> {
   const admin = await requireAdmin()
   if (admin.ok === false) return { error: admin.error }
@@ -31,7 +46,7 @@ export async function getGlobalSizeChart(): Promise<ActionResult> {
     return { error: error.message }
   }
 
-  return { success: true, data }
+  return { success: true, data: withImageUrls(data) }
 }
 
 export async function getAllSizeCharts(): Promise<ActionResult> {
@@ -49,14 +64,17 @@ export async function getAllSizeCharts(): Promise<ActionResult> {
       return { error: error.message }
     }
 
-    return { success: true, data: data || [] }
+    return { success: true, data: (data || []).map(withImageUrls) }
   } catch (e: any) {
     console.error('getAllSizeCharts error:', e)
     return { error: e?.message || 'Failed to fetch size charts' }
   }
 }
 
-export async function createOrUpdateGlobalSizeChart(
+// Creates or updates a NAMED, reusable chart in the library (is_global: false).
+// Products can pick one of these via size_chart_id — editing it here instantly
+// updates every product that picked it.
+export async function createOrUpdateLibraryChart(
   _prevState: ActionResult,
   formData: FormData
 ): Promise<ActionResult> {
@@ -64,62 +82,83 @@ export async function createOrUpdateGlobalSizeChart(
   if (admin.ok === false) return { error: admin.error }
   const supabase = admin.adminClient
 
-  const name = formData.get('name') as string || 'Global Size Chart'
-  const imageUrl = formData.get('image_url') as string
-  const cloudinaryPublicId = formData.get('cloudinary_public_id') as string
+  const id = (formData.get('id') as string) || null
+  const name = (formData.get('name') as string)?.trim() || 'Custom Chart'
   const isActive = formData.get('is_active') === 'on'
 
-  if (!imageUrl) {
-    return { error: 'Image URL is required' }
+  let imageUrls: string[] = []
+  let publicIds: string[] = []
+  try {
+    imageUrls = JSON.parse((formData.get('image_urls') as string) || '[]')
+    publicIds = JSON.parse((formData.get('cloudinary_public_ids') as string) || '[]')
+  } catch {
+    return { error: 'Invalid image data submitted.' }
   }
 
-  // Check if a global size chart already exists
-  const { data: existing } = await supabase
-    .from('size_charts')
-    .select('id, cloudinary_public_id')
-    .eq('is_global', true)
-    .single()
+  if (!imageUrls.length) {
+    return { error: 'At least one image is required' }
+  }
 
-  if (existing) {
-    // Update existing global size chart
-    // Delete old image from ImageKit if it exists
-    if (existing.cloudinary_public_id && isImageKitConfigured()) {
-      try {
-        await deleteFromImageKit(existing.cloudinary_public_id)
-      } catch (e) {
-        console.error('Failed to delete old size chart from ImageKit:', e)
+  const payload = {
+    name,
+    image_url: imageUrls[0],
+    cloudinary_public_id: publicIds[0] || null,
+    image_urls: imageUrls,
+    cloudinary_public_ids: publicIds,
+    is_active: isActive,
+  }
+
+  if (id) {
+    // is_global is intentionally left out of the payload so editing a chart
+    // here (including the current global one) never touches which chart is global.
+    const { data: existing } = await supabase
+      .from('size_charts')
+      .select('cloudinary_public_ids')
+      .eq('id', id)
+      .single()
+
+    if (existing?.cloudinary_public_ids?.length && isImageKitConfigured()) {
+      const removed = existing.cloudinary_public_ids.filter((pid: string) => pid && !publicIds.includes(pid))
+      for (const pid of removed) {
+        try {
+          await deleteFromImageKit(pid)
+        } catch (e) {
+          console.error('Failed to delete removed library chart image from ImageKit:', e)
+        }
       }
     }
 
-    const { error } = await supabase
-      .from('size_charts')
-      .update({
-        name,
-        image_url: imageUrl,
-        cloudinary_public_id: cloudinaryPublicId || null,
-        is_active: isActive,
-      })
-      .eq('id', existing.id)
-
-    if (error) {
-      return { error: error.message }
-    }
+    const { error } = await supabase.from('size_charts').update(payload).eq('id', id)
+    if (error) return { error: error.message }
   } else {
-    // Create new global size chart
-    const { error } = await supabase
+    // Safety net: if no global chart exists yet (e.g. a fresh install), the
+    // first chart ever created becomes global so products always have a fallback.
+    const { count } = await supabase
       .from('size_charts')
-      .insert({
-        name,
-        image_url: imageUrl,
-        cloudinary_public_id: cloudinaryPublicId || null,
-        is_global: true,
-        is_active: isActive,
-      })
+      .select('id', { count: 'exact', head: true })
+      .eq('is_global', true)
 
-    if (error) {
-      return { error: error.message }
-    }
+    const { error } = await supabase.from('size_charts').insert({ ...payload, is_global: !count })
+    if (error) return { error: error.message }
   }
+
+  revalidatePath('/admin/size-chart')
+  revalidatePath('/shop', 'layout')
+  return { success: true }
+}
+
+// Marks one chart as THE global/default fallback, unsetting whichever chart
+// currently holds that role. Exactly one chart is global at a time.
+export async function setGlobalSizeChart(id: string): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  if (admin.ok === false) return { error: admin.error }
+  const supabase = admin.adminClient
+
+  const { error: unsetError } = await supabase.from('size_charts').update({ is_global: false }).eq('is_global', true)
+  if (unsetError) return { error: unsetError.message }
+
+  const { error: setError } = await supabase.from('size_charts').update({ is_global: true }).eq('id', id)
+  if (setError) return { error: setError.message }
 
   revalidatePath('/admin/size-chart')
   revalidatePath('/shop', 'layout')
@@ -134,7 +173,7 @@ export async function deleteSizeChart(id: string): Promise<ActionResult> {
   // Don't allow deleting the global size chart
   const { data: chart } = await supabase
     .from('size_charts')
-    .select('is_global, cloudinary_public_id')
+    .select('is_global, cloudinary_public_id, cloudinary_public_ids')
     .eq('id', id)
     .single()
 
@@ -142,12 +181,16 @@ export async function deleteSizeChart(id: string): Promise<ActionResult> {
     return { error: 'Cannot delete the global size chart' }
   }
 
-  // Delete from ImageKit if exists
-  if (chart?.cloudinary_public_id && isImageKitConfigured()) {
-    try {
-      await deleteFromImageKit(chart.cloudinary_public_id)
-    } catch (e) {
-      console.error('Failed to delete size chart from ImageKit:', e)
+  // Delete all images (legacy single + multi) from ImageKit
+  const idsToDelete = new Set<string>(chart?.cloudinary_public_ids || [])
+  if (chart?.cloudinary_public_id) idsToDelete.add(chart.cloudinary_public_id)
+  if (idsToDelete.size && isImageKitConfigured()) {
+    for (const publicId of idsToDelete) {
+      try {
+        await deleteFromImageKit(publicId)
+      } catch (e) {
+        console.error('Failed to delete size chart image from ImageKit:', e)
+      }
     }
   }
 
@@ -210,7 +253,7 @@ export async function getProductSizeChart(productId: string): Promise<ActionResu
   // First get the product's size chart settings
   const { data: product, error: productError } = await supabase
     .from('products')
-    .select('use_global_size_chart, size_chart_image_url, size_chart_cloudinary_public_id')
+    .select('use_global_size_chart, size_chart_image_url, size_chart_cloudinary_public_id, size_chart_image_urls, size_chart_cloudinary_public_ids, size_chart_id')
     .eq('id', productId)
     .single()
 
@@ -218,9 +261,28 @@ export async function getProductSizeChart(productId: string): Promise<ActionResu
     return { error: productError.message }
   }
 
+  // Picked a named chart from the library — it stays in sync if that chart is edited later.
+  if (product.size_chart_id) {
+    const { data: libraryChart, error: libraryError } = await supabase
+      .from('size_charts')
+      .select('*')
+      .eq('id', product.size_chart_id)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    if (libraryChart) {
+      return { success: true, data: { ...withImageUrls(libraryChart), is_global: false } }
+    }
+    if (libraryError) {
+      console.error('getProductSizeChart: library chart lookup failed', libraryError)
+    }
+    // Fall through to global/custom/disabled if the linked chart is gone or inactive.
+  }
+
   // If size chart is explicitly disabled for this product
   if (
     product.use_global_size_chart === false &&
+    !product.size_chart_id &&
     (!product.size_chart_image_url || product.size_chart_image_url === 'disabled')
   ) {
     return { error: 'Size chart is disabled for this product' }
@@ -242,23 +304,25 @@ export async function getProductSizeChart(productId: string): Promise<ActionResu
       return { error: globalError.message }
     }
 
-    return { success: true, data: { ...globalChart, is_global: true } }
+    return { success: true, data: { ...withImageUrls(globalChart), is_global: true } }
   }
 
   // Otherwise return product-specific size chart
   if (product.size_chart_image_url && product.size_chart_image_url !== 'disabled') {
     return {
       success: true,
-      data: {
+      data: withImageUrls({
         id: productId,
         name: 'Product Specific Size Chart',
         image_url: product.size_chart_image_url,
         cloudinary_public_id: product.size_chart_cloudinary_public_id,
+        image_urls: product.size_chart_image_urls,
+        cloudinary_public_ids: product.size_chart_cloudinary_public_ids,
         is_global: false,
         is_active: true,
         created_at: '',
         updated_at: '',
-      }
+      }),
     }
   }
 
@@ -274,8 +338,8 @@ export async function getProductSizeChartPublic(productId?: string): Promise<Act
     if (productId) {
       let query = supabase
         .from('products')
-        .select('id, use_global_size_chart, size_chart_image_url, size_chart_cloudinary_public_id')
-      
+        .select('id, use_global_size_chart, size_chart_image_url, size_chart_cloudinary_public_id, size_chart_image_urls, size_chart_cloudinary_public_ids, size_chart_id')
+
       // If productId looks like UUID or regular string, check both id and slug
       const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productId)
       if (isUUID) {
@@ -287,21 +351,38 @@ export async function getProductSizeChartPublic(productId?: string): Promise<Act
       const { data: product } = await query.maybeSingle()
 
       if (product) {
+        // Picked a named chart from the library — stays in sync if it's edited later.
+        if (product.size_chart_id) {
+          const { data: libraryChart } = await supabase
+            .from('size_charts')
+            .select('*')
+            .eq('id', product.size_chart_id)
+            .eq('is_active', true)
+            .maybeSingle()
+
+          if (libraryChart) {
+            return { success: true, data: { ...withImageUrls(libraryChart), is_global: false } }
+          }
+          // Linked chart missing/inactive — fall through to global/custom/disabled below.
+        }
+
         // If disabled: use_global_size_chart is false and (no image or image === 'disabled')
-        if (product.use_global_size_chart === false) {
+        if (product.use_global_size_chart === false && !product.size_chart_id) {
           if (product.size_chart_image_url && product.size_chart_image_url !== 'disabled') {
             return {
               success: true,
-              data: {
+              data: withImageUrls({
                 id: product.id,
                 name: 'Product Specific Size Chart',
                 image_url: product.size_chart_image_url,
                 cloudinary_public_id: product.size_chart_cloudinary_public_id,
+                image_urls: product.size_chart_image_urls,
+                cloudinary_public_ids: product.size_chart_cloudinary_public_ids,
                 is_global: false,
                 is_active: true,
                 created_at: '',
                 updated_at: '',
-              }
+              }),
             }
           }
           // Size chart is explicitly disabled for this product!
@@ -321,7 +402,7 @@ export async function getProductSizeChartPublic(productId?: string): Promise<Act
       .maybeSingle()
 
     if (globalChart && globalChart.image_url) {
-      return { success: true, data: { ...globalChart, is_global: true } }
+      return { success: true, data: { ...withImageUrls(globalChart), is_global: true } }
     }
 
     // 3. Fallback to any active size chart
@@ -334,7 +415,7 @@ export async function getProductSizeChartPublic(productId?: string): Promise<Act
       .maybeSingle()
 
     if (anyChart && anyChart.image_url) {
-      return { success: true, data: anyChart }
+      return { success: true, data: withImageUrls(anyChart) }
     }
 
     return { error: 'No size chart available' }

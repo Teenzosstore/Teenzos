@@ -2,7 +2,8 @@
 
 import { useTransition, useActionState, useState, useEffect } from 'react'
 import { createProduct, updateProduct, type ActionResult } from '@/actions/products'
-import { uploadSizeChartImage, type ActionResult as SizeChartActionResult } from '@/actions/size-charts'
+import { uploadSizeChartImage, getAllSizeCharts, type ActionResult as SizeChartActionResult } from '@/actions/size-charts'
+import type { SizeChart } from '@/types/database'
 import Link from 'next/link'
 import Image from 'next/image'
 import { 
@@ -17,7 +18,10 @@ import {
   ExternalLink, 
   Sparkles,
   Tag,
-  Check
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Star
 } from 'lucide-react'
 import { ImageKitUploadWidget } from '@/components/ImageKitUploadWidget'
 import { useToast } from '@/context/ToastContext'
@@ -112,27 +116,59 @@ export default function ProductForm({
   const [colorInputName, setColorInputName] = useState('')
   const [colorInputHex, setColorInputHex] = useState('#0B0D0E')
 
-  // Size Chart state: 'global' | 'custom' | 'disabled'
-  const initialSizeChartMode = (() => {
-    if (!product) return 'global'
+  // Size Chart: one visual picker. chartChoice is 'default' (follow whichever
+  // chart is global storewide — auto-updates if the admin changes it later),
+  // 'custom' (upload just for this product), or a specific chart id.
+  const initialChartChoice = (() => {
+    if (!product) return 'default'
+    if (product.size_chart_id) return product.size_chart_id
     if (
-      product.size_chart_image_url === 'disabled' ||
-      (product.use_global_size_chart === false && (!product.size_chart_image_url || product.size_chart_image_url === ''))
+      product.use_global_size_chart === false &&
+      product.size_chart_image_url &&
+      product.size_chart_image_url !== 'disabled'
     ) {
-      return 'disabled'
-    }
-    if (product.use_global_size_chart === false) {
       return 'custom'
     }
-    return 'global'
+    return 'default'
   })()
+  const [chartChoice, setChartChoice] = useState<string>(initialChartChoice)
 
-  const [sizeChartMode, setSizeChartMode] = useState<'global' | 'custom' | 'disabled'>(initialSizeChartMode)
-  const [sizeChartImageUrl, setSizeChartImageUrl] = useState<string | null>(
-    product?.size_chart_image_url === 'disabled' ? null : (product?.size_chart_image_url || null)
+  const [sizeChartEnabled, setSizeChartEnabled] = useState(
+    !product || product.size_chart_image_url !== 'disabled'
   )
-  const [sizeChartCloudinaryId, setSizeChartCloudinaryId] = useState<string | null>(
-    product?.size_chart_cloudinary_public_id === 'disabled' ? null : (product?.size_chart_cloudinary_public_id || null)
+
+  // All available charts (global + named) shown as a visual picker.
+  const [allCharts, setAllCharts] = useState<SizeChart[]>([])
+  const [isLoadingCharts, setIsLoadingCharts] = useState(false)
+
+  useEffect(() => {
+    if (allCharts.length > 0 || isLoadingCharts) return
+    setIsLoadingCharts(true)
+    getAllSizeCharts()
+      .then((res) => {
+        if (res.success && res.data) setAllCharts(res.data as SizeChart[])
+      })
+      .finally(() => setIsLoadingCharts(false))
+  }, [allCharts.length, isLoadingCharts])
+
+  const globalLibraryChart = allCharts.find((c) => c.is_global)
+  const namedCharts = allCharts.filter((c) => !c.is_global)
+
+  // Gallery of custom size chart images for this product. Seeded from
+  // size_chart_image_urls, falling back to the legacy single-image field.
+  const initialSizeChartImages = (() => {
+    if (!product || product.size_chart_image_url === 'disabled') return []
+    if (product.size_chart_image_urls?.length) {
+      const ids = product.size_chart_cloudinary_public_ids || []
+      return product.size_chart_image_urls.map((url, i) => ({ url, publicId: ids[i] || null }))
+    }
+    if (product.size_chart_image_url) {
+      return [{ url: product.size_chart_image_url, publicId: product.size_chart_cloudinary_public_id || null }]
+    }
+    return []
+  })()
+  const [sizeChartImages, setSizeChartImages] = useState<{ url: string; publicId: string | null }[]>(
+    initialSizeChartImages
   )
   const [isSizeChartUploading, setIsSizeChartUploading] = useState(false)
   const [sizeChartUploadState] = useActionState<SizeChartActionResult, FormData>(
@@ -141,13 +177,26 @@ export default function ProductForm({
   )
 
   const handleSizeChartUploadSuccess = (result: any) => {
-    setSizeChartImageUrl(result.url)
-    setSizeChartCloudinaryId(result.fileId)
+    setSizeChartImages((prev) => [...prev, { url: result.url, publicId: result.fileId || null }])
     setIsSizeChartUploading(false)
   }
 
   const handleSizeChartUploadOpen = () => setIsSizeChartUploading(true)
   const handleSizeChartUploadError = () => setIsSizeChartUploading(false)
+
+  const removeSizeChartImageAt = (index: number) => {
+    setSizeChartImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const moveSizeChartImage = (index: number, direction: 'left' | 'right') => {
+    const target = direction === 'left' ? index - 1 : index + 1
+    setSizeChartImages((prev) => {
+      if (target < 0 || target >= prev.length) return prev
+      const next = [...prev]
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return next
+    })
+  }
 
   // Initial features / checklist with checkmarks (from product_information table or product data)
   const initialFeatures = (() => {
@@ -664,172 +713,258 @@ export default function ProductForm({
                 
                 {/* Active / Disabled Status Pill */}
                 <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full flex items-center gap-1.5 ${
-                  sizeChartMode === 'disabled'
+                  !sizeChartEnabled
                     ? 'bg-stone-100 text-stone-500 border border-stone-200'
                     : 'bg-emerald-50 text-emerald-700 border border-emerald-200/80'
                 }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${sizeChartMode === 'disabled' ? 'bg-stone-400' : 'bg-emerald-500 animate-pulse'}`} />
-                  {sizeChartMode === 'disabled' ? 'Disabled' : 'Active'}
+                  <span className={`w-1.5 h-1.5 rounded-full ${!sizeChartEnabled ? 'bg-stone-400' : 'bg-emerald-500 animate-pulse'}`} />
+                  {!sizeChartEnabled ? 'Disabled' : 'Active'}
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* 1. Global Standard */}
-                <label className={`p-3 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
-                  sizeChartMode === 'global'
-                    ? 'border-stone-900 bg-stone-50/50 shadow-2xs ring-1 ring-stone-900/10'
-                    : 'border-stone-200 hover:border-stone-300 bg-white'
-                }`}>
-                  <div className="flex items-center gap-2.5 mb-1.5">
-                    <input
-                      type="radio"
-                      name="size_chart_mode_choice"
-                      value="global"
-                      checked={sizeChartMode === 'global'}
-                      onChange={() => setSizeChartMode('global')}
-                      className="w-4 h-4 text-[#0B0D0E] focus:ring-[#0B0D0E]"
-                    />
-                    <span className="text-xs font-bold text-stone-900">
-                      Standard Global Chart
-                    </span>
-                  </div>
-                  <span className="text-[11px] text-stone-500 pl-6 leading-tight">
-                    Active • Storewide interactive chart
-                  </span>
-                </label>
-
-                {/* 2. Custom Upload */}
-                <label className={`p-3 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
-                  sizeChartMode === 'custom'
-                    ? 'border-stone-900 bg-stone-50/50 shadow-2xs ring-1 ring-stone-900/10'
-                    : 'border-stone-200 hover:border-stone-300 bg-white'
-                }`}>
-                  <div className="flex items-center gap-2.5 mb-1.5">
-                    <input
-                      type="radio"
-                      name="size_chart_mode_choice"
-                      value="custom"
-                      checked={sizeChartMode === 'custom'}
-                      onChange={() => setSizeChartMode('custom')}
-                      className="w-4 h-4 text-[#0B0D0E] focus:ring-[#0B0D0E]"
-                    />
-                    <span className="text-xs font-bold text-stone-900">
-                      Custom Chart Image
-                    </span>
-                  </div>
-                  <span className="text-[11px] text-stone-500 pl-6 leading-tight">
-                    Active • Upload specific diagram
-                  </span>
-                </label>
-
-                {/* 3. Disabled Option */}
-                <label className={`p-3 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
-                  sizeChartMode === 'disabled'
-                    ? 'border-red-500 bg-red-50/30 shadow-2xs ring-1 ring-red-500/20'
-                    : 'border-stone-200 hover:border-stone-300 bg-white'
-                }`}>
-                  <div className="flex items-center gap-2.5 mb-1.5">
-                    <input
-                      type="radio"
-                      name="size_chart_mode_choice"
-                      value="disabled"
-                      checked={sizeChartMode === 'disabled'}
-                      onChange={() => setSizeChartMode('disabled')}
-                      className="w-4 h-4 text-red-600 focus:ring-red-500"
-                    />
-                    <span className="text-xs font-bold text-stone-900">
-                      Disable Size Chart
-                    </span>
-                  </div>
-                  <span className="text-[11px] text-stone-500 pl-6 leading-tight">
-                    Inactive • Hidden on storefront
-                  </span>
+              {/* Enable / Disable Toggle */}
+              <div className="flex items-center justify-between p-3 bg-stone-50 rounded-xl border border-stone-200/80">
+                <div>
+                  <h3 className="text-xs font-bold text-stone-900">Show Size Chart</h3>
+                  <p className="text-[11px] text-stone-500">
+                    When on, customers see a &quot;Size Guide&quot; button on this product.
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={sizeChartEnabled}
+                    onChange={(e) => setSizeChartEnabled(e.target.checked)}
+                  />
+                  <div className="w-10 h-5 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
                 </label>
               </div>
 
-              {sizeChartMode === 'disabled' && (
-                <div className="p-3 rounded-lg bg-stone-50 border border-stone-200/80 flex items-center gap-2 text-stone-600 text-xs">
-                  <span className="text-amber-500 font-bold">ℹ</span>
-                  <span>Size Chart disabled hai. Frontend me &quot;Size Guide&quot; button aur &quot;Size &amp; Fit&quot; tab hide rahenge.</span>
-                </div>
-              )}
-
-              {sizeChartMode === 'custom' && (
-                <div className="pt-3 border-t border-stone-100 space-y-2">
+              {sizeChartEnabled && (
+                <div className="space-y-3">
                   <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider">
-                    Custom Chart Image
+                    Choose a Chart
                   </label>
-                  {sizeChartImageUrl ? (
-                    <div className="relative w-full max-w-sm aspect-video rounded-xl border border-stone-200 overflow-hidden bg-stone-50">
-                      <Image
-                        src={sizeChartImageUrl}
-                        alt="Size Chart Preview"
-                        fill
-                        className="object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSizeChartImageUrl(null)
-                          setSizeChartCloudinaryId(null)
-                        }}
-                        className="absolute top-2 right-2 p-1 bg-white/90 hover:bg-white text-stone-800 hover:text-red-600 rounded-md shadow-xs transition-all"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+
+                  {isLoadingCharts ? (
+                    <div className="flex items-center gap-2 text-stone-500 text-xs py-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading charts...
                     </div>
                   ) : (
-                    <ImageKitUploadWidget
-                      options={{
-                        maxFiles: 1,
-                        folder: "teenzos/size-charts",
-                        clientAllowedFormats: ["jpg", "jpeg", "png", "webp"]
-                      }}
-                      onSuccess={handleSizeChartUploadSuccess}
-                      onOpen={handleSizeChartUploadOpen}
-                      onError={handleSizeChartUploadError}
-                      onClose={() => setIsSizeChartUploading(false)}
-                    >
-                      {({ open, isUploading: widgetUploading }) => (
-                        <button
-                          type="button"
-                          onClick={() => open()}
-                          disabled={isSizeChartUploading || widgetUploading}
-                          className="w-full max-w-sm aspect-video flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-stone-300 bg-stone-50 text-stone-600 hover:border-[#F72585] hover:text-[#F72585] transition-all cursor-pointer"
-                        >
-                          {isSizeChartUploading || widgetUploading ? (
-                            <Loader2 className="w-5 h-5 animate-spin text-[#F72585]" />
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {/* Default — whatever is marked global in the Size Chart library, auto-updates */}
+                      <button
+                        type="button"
+                        onClick={() => setChartChoice('default')}
+                        className={`p-2 rounded-xl border text-left transition-all ${
+                          chartChoice === 'default'
+                            ? 'border-[#F72585] bg-[#FFF0F6]/40 ring-1 ring-[#F72585]/30'
+                            : 'border-stone-200 hover:border-stone-300 bg-white'
+                        }`}
+                      >
+                        <div className="relative w-full aspect-[210/297] rounded-lg overflow-hidden bg-stone-100 mb-1.5">
+                          {globalLibraryChart ? (
+                            <Image src={globalLibraryChart.image_url} alt="Default chart" fill className="object-cover" />
                           ) : (
-                            <ImageIcon className="w-5 h-5" />
+                            <div className="w-full h-full flex items-center justify-center text-stone-300">
+                              <ImageIcon className="w-6 h-6" />
+                            </div>
                           )}
-                          <span className="text-xs font-semibold">Upload Custom Chart</span>
+                          <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-black/60 text-white text-[9px] font-bold flex items-center gap-0.5">
+                            <Star className="w-2.5 h-2.5 fill-white" />
+                            Default
+                          </span>
+                          {chartChoice === 'default' && (
+                            <span className="absolute inset-0 flex items-center justify-center bg-[#F72585]/20">
+                              <CheckCircle2 className="w-6 h-6 text-[#F72585] drop-shadow" />
+                            </span>
+                          )}
+                        </div>
+                        <span className="block text-[11px] font-bold text-stone-900 truncate">
+                          {globalLibraryChart?.name || 'Global Chart'}
+                        </span>
+                        <span className="block text-[10px] text-stone-400">Auto-updates</span>
+                      </button>
+
+                      {/* Named charts from the library */}
+                      {namedCharts.map((chart) => (
+                        <button
+                          key={chart.id}
+                          type="button"
+                          onClick={() => setChartChoice(chart.id)}
+                          className={`p-2 rounded-xl border text-left transition-all ${
+                            chartChoice === chart.id
+                              ? 'border-[#F72585] bg-[#FFF0F6]/40 ring-1 ring-[#F72585]/30'
+                              : 'border-stone-200 hover:border-stone-300 bg-white'
+                          }`}
+                        >
+                          <div className="relative w-full aspect-[210/297] rounded-lg overflow-hidden bg-stone-100 mb-1.5">
+                            <Image src={chart.image_url} alt={chart.name} fill className="object-cover" />
+                            {chartChoice === chart.id && (
+                              <span className="absolute inset-0 flex items-center justify-center bg-[#F72585]/20">
+                                <CheckCircle2 className="w-6 h-6 text-[#F72585] drop-shadow" />
+                              </span>
+                            )}
+                          </div>
+                          <span className="block text-[11px] font-bold text-stone-900 truncate" title={chart.name}>
+                            {chart.name}
+                          </span>
+                          <span className="block text-[10px] text-stone-400">
+                            {chart.image_urls?.length || 1} image{(chart.image_urls?.length || 1) === 1 ? '' : 's'}
+                          </span>
                         </button>
+                      ))}
+
+                      {/* Upload one-off images just for this product */}
+                      <button
+                        type="button"
+                        onClick={() => setChartChoice('custom')}
+                        className={`p-2 rounded-xl border text-left transition-all ${
+                          chartChoice === 'custom'
+                            ? 'border-[#F72585] bg-[#FFF0F6]/40 ring-1 ring-[#F72585]/30'
+                            : 'border-stone-200 hover:border-stone-300 bg-white'
+                        }`}
+                      >
+                        <div className="w-full aspect-[210/297] rounded-lg border-2 border-dashed border-stone-300 flex items-center justify-center mb-1.5">
+                          <Plus className="w-5 h-5 text-stone-400" />
+                        </div>
+                        <span className="block text-[11px] font-bold text-stone-900">Upload New</span>
+                        <span className="block text-[10px] text-stone-400">Just for this product</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {chartChoice === 'custom' && (
+                    <div className="pt-3 border-t border-stone-100 space-y-3">
+                      <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider">
+                        Custom Chart Images{' '}
+                        <span className="font-normal normal-case text-stone-400">
+                          (upload several — back view, front view, side view, measurements, etc.)
+                        </span>
+                      </label>
+
+                      {sizeChartImages.length > 0 && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-w-xl">
+                          {sizeChartImages.map((img, idx) => (
+                            <div
+                              key={`${img.url}-${idx}`}
+                              className="group relative w-full aspect-[210/297] rounded-xl border border-stone-200 overflow-hidden bg-stone-50"
+                            >
+                              <Image src={img.url} alt={`Size chart #${idx + 1}`} fill className="object-cover" />
+
+                              <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/60 text-white text-[10px] font-bold pointer-events-none">
+                                {idx + 1}
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() => removeSizeChartImageAt(idx)}
+                                className="absolute top-1.5 right-1.5 p-1 rounded-md bg-red-600/90 hover:bg-red-600 text-white shadow-xs transition-colors"
+                                title="Remove this image"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+
+                              <div className="absolute bottom-1.5 left-1.5 right-1.5 flex items-center justify-between">
+                                <button
+                                  type="button"
+                                  onClick={() => moveSizeChartImage(idx, 'left')}
+                                  disabled={idx === 0}
+                                  className="p-1 rounded-md bg-black/60 hover:bg-black/80 text-white shadow-xs transition-colors disabled:opacity-0 disabled:pointer-events-none"
+                                  title="Move left"
+                                >
+                                  <ChevronLeft className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => moveSizeChartImage(idx, 'right')}
+                                  disabled={idx === sizeChartImages.length - 1}
+                                  className="p-1 rounded-md bg-black/60 hover:bg-black/80 text-white shadow-xs transition-colors disabled:opacity-0 disabled:pointer-events-none"
+                                  title="Move right"
+                                >
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       )}
-                    </ImageKitUploadWidget>
+
+                      <ImageKitUploadWidget
+                        options={{
+                          maxFiles: 1,
+                          folder: "teenzos/size-charts",
+                          clientAllowedFormats: ["jpg", "jpeg", "png", "webp"]
+                        }}
+                        onSuccess={handleSizeChartUploadSuccess}
+                        onOpen={handleSizeChartUploadOpen}
+                        onError={handleSizeChartUploadError}
+                        onClose={() => setIsSizeChartUploading(false)}
+                      >
+                        {({ open, isUploading: widgetUploading }) => (
+                          <button
+                            type="button"
+                            onClick={() => open()}
+                            disabled={isSizeChartUploading || widgetUploading}
+                            className="w-full max-w-sm h-20 flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-stone-300 bg-stone-50 text-stone-600 hover:border-[#F72585] hover:text-[#F72585] transition-all cursor-pointer disabled:opacity-50"
+                          >
+                            {isSizeChartUploading || widgetUploading ? (
+                              <Loader2 className="w-5 h-5 animate-spin text-[#F72585]" />
+                            ) : (
+                              <Plus className="w-5 h-5" />
+                            )}
+                            <span className="text-xs font-semibold">
+                              {sizeChartImages.length === 0 ? 'Upload Custom Chart' : 'Add Another Image'}
+                            </span>
+                          </button>
+                        )}
+                      </ImageKitUploadWidget>
+                    </div>
                   )}
                 </div>
               )}
 
               {/* Hidden fields */}
-              <input type="hidden" name="use_global_size_chart" value={(sizeChartMode === 'global').toString()} />
+              <input
+                type="hidden"
+                name="use_global_size_chart"
+                value={(sizeChartEnabled && chartChoice === 'default').toString()}
+              />
+              <input
+                type="hidden"
+                name="size_chart_id"
+                value={sizeChartEnabled && chartChoice !== 'default' && chartChoice !== 'custom' ? chartChoice : ''}
+              />
               <input
                 type="hidden"
                 name="size_chart_image_url"
                 value={
-                  sizeChartMode === 'disabled'
+                  !sizeChartEnabled
                     ? 'disabled'
-                    : sizeChartMode === 'custom'
-                    ? (sizeChartImageUrl || '')
+                    : chartChoice === 'custom'
+                    ? (sizeChartImages[0]?.url || '')
                     : ''
                 }
               />
               <input
                 type="hidden"
                 name="size_chart_cloudinary_public_id"
+                value={sizeChartEnabled && chartChoice === 'custom' ? (sizeChartImages[0]?.publicId || '') : ''}
+              />
+              <input
+                type="hidden"
+                name="size_chart_image_urls"
+                value={sizeChartEnabled && chartChoice === 'custom' ? JSON.stringify(sizeChartImages.map((i) => i.url)) : '[]'}
+              />
+              <input
+                type="hidden"
+                name="size_chart_cloudinary_public_ids"
                 value={
-                  sizeChartMode === 'custom'
-                    ? (sizeChartCloudinaryId || '')
-                    : ''
+                  sizeChartEnabled && chartChoice === 'custom'
+                    ? JSON.stringify(sizeChartImages.map((i) => i.publicId || ''))
+                    : '[]'
                 }
               />
             </div>

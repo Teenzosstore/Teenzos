@@ -31,7 +31,7 @@ type ProductViewSectionProps = {
   categoryName: string
   categoryId?: string
   sizeChart?: {
-    imageUrl: string
+    imageUrls: string[]
     title: string
   } | null
   reviews?: any[]
@@ -65,26 +65,25 @@ export default function ProductViewSection({
     return ['/image.png']
   }, [images])
 
-  // Handle color change and try to match with an image
+  // Gallery for the selected color only. If this product doesn't tag any
+  // image with that color (e.g. no per-color photos were uploaded), fall
+  // back to the full gallery rather than showing an empty one.
+  const displayedImageUrls = useMemo(() => {
+    if (!selectedColor || !images || images.length === 0) return allImageUrls
+
+    const normalizedColor = selectedColor.toLowerCase().trim()
+    const colorMatches = images
+      .filter((img) => img.color_name?.toLowerCase().trim() === normalizedColor)
+      .map((img) => img.image_url)
+
+    return colorMatches.length > 0 ? colorMatches : allImageUrls
+  }, [images, allImageUrls, selectedColor])
+
+  // Handle color change — the gallery itself is filtered to this color via
+  // displayedImageUrls above, so just reset the slider back to the first image.
   const handleColorChange = (colorName: string) => {
     setSelectedColor(colorName)
-
-    const normalizedColor = colorName.toLowerCase().trim()
-    const colorMatchIdx = images.findIndex(
-      (img) => img.color_name?.toLowerCase().trim() === normalizedColor
-    )
-
-    if (colorMatchIdx !== -1) {
-      setGalleryIndex(colorMatchIdx)
-    } else {
-      // For default sample colors: Black -> 0, White -> 1, Pink -> 2, etc.
-      const colorIdx = uniqueColors.findIndex(
-        (c) => c.name.toLowerCase().trim() === normalizedColor
-      )
-      if (colorIdx !== -1 && colorIdx < allImageUrls.length) {
-        setGalleryIndex(colorIdx)
-      }
-    }
+    setGalleryIndex(0)
   }
 
   // Combine information into specifications if not provided
@@ -118,7 +117,7 @@ export default function ProductViewSection({
         {/* Left Column: Vertical Gallery & Showcase */}
         <div className="lg:col-span-6 w-full">
           <ProductGallery
-            images={allImageUrls}
+            images={displayedImageUrls}
             productName={product.name}
             badge={product.badge || undefined}
             selectedIndex={galleryIndex}

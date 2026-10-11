@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import {
@@ -9,21 +9,23 @@ import {
   Trash2,
   Save,
   X,
-  Check,
   AlertCircle,
   ZoomIn,
-  UploadCloud,
-  Globe,
   Layers,
   CheckCircle2,
-  RefreshCw,
   Eye,
+  Plus,
+  ChevronLeft,
+  ChevronRight,
+  Pencil,
+  Star,
 } from 'lucide-react'
 import { ImageKitUploadWidget } from '@/components/ImageKitUploadWidget'
 import {
-  createOrUpdateGlobalSizeChart,
+  createOrUpdateLibraryChart,
   deleteSizeChart,
   getAllSizeCharts,
+  setGlobalSizeChart,
 } from '@/actions/size-charts'
 import type { SizeChart } from '@/types/database'
 
@@ -33,24 +35,121 @@ interface SizeChartManagerProps {
 
 export default function SizeChartManager({ initialCharts = [] }: SizeChartManagerProps) {
   const [charts, setCharts] = useState<SizeChart[]>(initialCharts)
-  const [activeTab, setActiveTab] = useState<'global' | 'list'>('global')
 
   // Find global chart
   const globalChart = charts.find((c) => c.is_global)
 
-  // Form states for Global Chart
-  const [chartName, setChartName] = useState(globalChart?.name || 'Global Size Chart')
-  const [isActive, setIsActive] = useState(globalChart ? globalChart.is_active : true)
-  const [stagedImageUrl, setStagedImageUrl] = useState<string | null>(null)
-  const [stagedPublicId, setStagedPublicId] = useState<string | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
+  // Gallery seed helper, shared by the create/edit modal below. Reads the
+  // saved chart's image_urls, falling back to the legacy single image_url.
+  const seedImages = (chart?: SizeChart) => {
+    if (!chart) return []
+    const urls = chart.image_urls?.length ? chart.image_urls : chart.image_url ? [chart.image_url] : []
+    const ids = chart.cloudinary_public_ids?.length ? chart.cloudinary_public_ids : chart.cloudinary_public_id ? [chart.cloudinary_public_id] : []
+    return urls.map((url, i) => ({ url, publicId: ids[i] || null }))
+  }
 
-  // Lightbox & Delete states
-  const [zoomModalUrl, setZoomModalUrl] = useState<{ url: string; title: string } | null>(null)
+  // All image URLs for a saved chart row (falls back to the legacy single image).
+  const chartImageUrls = (chart: SizeChart) => (chart.image_urls?.length ? chart.image_urls : [chart.image_url])
+
+  // Lightbox, delete & "set as global" states
+  const [zoomModal, setZoomModal] = useState<{ images: string[]; index: number; title: string } | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [settingGlobalId, setSettingGlobalId] = useState<string | null>(null)
+
+  const handleSetGlobal = async (id: string) => {
+    setSettingGlobalId(id)
+    const result = await setGlobalSizeChart(id)
+    setSettingGlobalId(null)
+
+    if (result.success) {
+      const refresh = await getAllSizeCharts()
+      if (refresh.success && refresh.data) {
+        setCharts(refresh.data)
+      }
+      setFeedback({ type: 'success', message: 'This chart is now the storewide default.' })
+    } else {
+      setFeedback({ type: 'error', message: result.error || 'Failed to set as global.' })
+    }
+  }
+
+  // Library chart create/edit modal (null editorChart = creating a new one)
+  const [isEditorOpen, setIsEditorOpen] = useState(false)
+  const [editorChart, setEditorChart] = useState<SizeChart | null>(null)
+  const [editorName, setEditorName] = useState('')
+  const [editorActive, setEditorActive] = useState(true)
+  const [editorImages, setEditorImages] = useState<{ url: string; publicId: string | null }[]>([])
+  const [editorUploading, setEditorUploading] = useState(false)
+  const [editorSaving, setEditorSaving] = useState(false)
+  const [editorError, setEditorError] = useState<string | null>(null)
+
+  const openCreateEditor = () => {
+    setEditorChart(null)
+    setEditorName('')
+    setEditorActive(true)
+    setEditorImages([])
+    setEditorError(null)
+    setIsEditorOpen(true)
+  }
+
+  const openEditEditor = (chart: SizeChart) => {
+    setEditorChart(chart)
+    setEditorName(chart.name)
+    setEditorActive(chart.is_active)
+    setEditorImages(seedImages(chart))
+    setEditorError(null)
+    setIsEditorOpen(true)
+  }
+
+  const closeEditor = () => {
+    if (editorSaving) return
+    setIsEditorOpen(false)
+  }
+
+  const removeEditorImageAt = (index: number) => {
+    setEditorImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const moveEditorImage = (index: number, direction: 'left' | 'right') => {
+    const target = direction === 'left' ? index - 1 : index + 1
+    setEditorImages((prev) => {
+      if (target < 0 || target >= prev.length) return prev
+      const next = [...prev]
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return next
+    })
+  }
+
+  const handleSaveLibraryChart = async () => {
+    if (editorImages.length === 0) {
+      setEditorError('Please upload at least one image.')
+      return
+    }
+    setEditorSaving(true)
+    setEditorError(null)
+
+    const formData = new FormData()
+    if (editorChart) formData.set('id', editorChart.id)
+    formData.set('name', editorName.trim() || 'Custom Chart')
+    formData.set('image_urls', JSON.stringify(editorImages.map((i) => i.url)))
+    formData.set('cloudinary_public_ids', JSON.stringify(editorImages.map((i) => i.publicId || '')))
+    if (editorActive) formData.set('is_active', 'on')
+
+    const result = await createOrUpdateLibraryChart({}, formData)
+    setEditorSaving(false)
+
+    if (result.success) {
+      const refresh = await getAllSizeCharts()
+      if (refresh.success && refresh.data) {
+        setCharts(refresh.data)
+      }
+      setFeedback({ type: 'success', message: editorChart ? 'Chart updated successfully!' : 'Chart created successfully!' })
+      setIsEditorOpen(false)
+    } else {
+      setEditorError(result.error || 'Failed to save chart.')
+    }
+  }
 
   // Async action transitions
-  const [isPending, startTransition] = useTransition()
   const [isDeleting, setIsDeleting] = useState(false)
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [isMounted, setIsMounted] = useState(false)
@@ -61,7 +160,7 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
 
   // Lock body scroll when any modal is open
   useEffect(() => {
-    if (zoomModalUrl || deleteConfirmId) {
+    if (zoomModal || deleteConfirmId) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = ''
@@ -69,15 +168,7 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
     return () => {
       document.body.style.overflow = ''
     }
-  }, [zoomModalUrl, deleteConfirmId])
-
-  // Sync form when globalChart changes
-  useEffect(() => {
-    if (globalChart) {
-      setChartName(globalChart.name)
-      setIsActive(globalChart.is_active)
-    }
-  }, [globalChart])
+  }, [zoomModal, deleteConfirmId])
 
   // Clear feedback after 4s
   useEffect(() => {
@@ -87,76 +178,25 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
     }
   }, [feedback])
 
-  // Handle ESC key for modal
+  // Handle ESC / arrow keys for the zoom modal
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setZoomModalUrl(null)
+        setZoomModal(null)
         setDeleteConfirmId(null)
+      } else if (zoomModal && zoomModal.images.length > 1) {
+        if (e.key === 'ArrowLeft') {
+          setZoomModal((prev) =>
+            prev ? { ...prev, index: (prev.index - 1 + prev.images.length) % prev.images.length } : prev
+          )
+        } else if (e.key === 'ArrowRight') {
+          setZoomModal((prev) => (prev ? { ...prev, index: (prev.index + 1) % prev.images.length } : prev))
+        }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
-
-  const handleUploadSuccess = (result: any) => {
-    const url = result.url || result.info?.secure_url
-    const fileId = result.fileId || result.info?.public_id
-    setStagedImageUrl(url)
-    setStagedPublicId(fileId)
-    setIsUploading(false)
-    setFeedback({ type: 'success', message: 'New size chart image uploaded. Click Save to apply.' })
-  }
-
-  const handleTabChange = async (tab: 'global' | 'list') => {
-    setActiveTab(tab)
-    if (tab === 'list') {
-      const result = await getAllSizeCharts()
-      if (result.success && result.data) {
-        setCharts(result.data)
-      }
-    }
-  }
-
-  const handleSaveGlobal = () => {
-    const effectiveImageUrl = stagedImageUrl || globalChart?.image_url
-
-    if (!effectiveImageUrl) {
-      setFeedback({ type: 'error', message: 'Please upload a size chart image first.' })
-      return
-    }
-
-    startTransition(async () => {
-      setFeedback(null)
-      const formData = new FormData()
-      formData.set('name', chartName.trim() || 'Global Size Chart')
-      formData.set('image_url', effectiveImageUrl)
-      if (stagedPublicId || globalChart?.cloudinary_public_id) {
-        formData.set(
-          'cloudinary_public_id',
-          stagedPublicId || globalChart?.cloudinary_public_id || ''
-        )
-      }
-      if (isActive) {
-        formData.set('is_active', 'on')
-      }
-
-      const result = await createOrUpdateGlobalSizeChart({}, formData)
-
-      if (result.success) {
-        setStagedImageUrl(null)
-        setStagedPublicId(null)
-        // Refresh charts
-        const refresh = await getAllSizeCharts()
-        if (refresh.success && refresh.data) {
-          setCharts(refresh.data)
-        }
-        setFeedback({ type: 'success', message: 'Global size chart saved successfully!' })
-      } else {
-        setFeedback({ type: 'error', message: result.error || 'Failed to save size chart.' })
-      }
-    })
-  }
+  }, [zoomModal])
 
   const confirmDelete = async (id: string) => {
     setIsDeleting(true)
@@ -172,63 +212,43 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
     setDeleteConfirmId(null)
   }
 
-  const currentPreviewImage = stagedImageUrl || globalChart?.image_url
-
   return (
     <div className="space-y-4">
-      {/* Top Compact Navigation & Quick Stats */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-panel p-2 sm:p-2.5 rounded-2xl border border-cream-line/70 shadow-sm">
-        {/* Modern Segmented Control Pills */}
-        <div className="flex items-center gap-1.5 p-1 bg-cream-deep/60 rounded-xl border border-cream-line/50">
-          <button
-            type="button"
-            onClick={() => handleTabChange('global')}
-            className={`inline-flex items-center gap-2 px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all ${
-              activeTab === 'global'
-                ? 'bg-panel text-ink shadow-sm border border-cream-line/80'
-                : 'text-ink/60 hover:text-ink hover:bg-panel/40'
-            }`}
-          >
-            <Globe className="w-3.5 h-3.5 text-gold" />
-            <span>Global Size Chart</span>
-            {globalChart && (
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  globalChart.is_active ? 'bg-emerald-500' : 'bg-amber-400'
-                }`}
-                title={globalChart.is_active ? 'Active' : 'Inactive'}
-              />
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleTabChange('list')}
-            className={`inline-flex items-center gap-2 px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all ${
-              activeTab === 'list'
-                ? 'bg-panel text-ink shadow-sm border border-cream-line/80'
-                : 'text-ink/60 hover:text-ink hover:bg-panel/40'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5 text-ink/50" />
-            <span>All Size Charts</span>
-            <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-cream-deep text-ink/70 border border-cream-line/60">
-              {charts.length}
-            </span>
-          </button>
+      {/* Top Header & Quick Stats */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-panel p-3 sm:p-3.5 rounded-2xl border border-cream-line/70 shadow-sm">
+        <div className="flex items-center gap-2.5">
+          <span className="p-1.5 rounded-lg bg-gold/10 text-gold-light border border-gold/20">
+            <Layers className="w-4 h-4" />
+          </span>
+          <div>
+            <h2 className="text-sm font-bold text-ink">
+              Size Chart Library{' '}
+              <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-cream-deep text-ink/70 border border-cream-line/60 align-middle ml-1">
+                {charts.length}
+              </span>
+            </h2>
+            <p className="text-[11px] text-ink/50">
+              One chart is the storewide default — products can also pick any other chart by name.
+            </p>
+          </div>
         </div>
 
         {/* Status / Quick Notice */}
-        <div className="flex items-center gap-3 px-2 text-xs text-ink/60">
+        <div className="flex items-center gap-3 px-1 text-xs text-ink/60 shrink-0">
           {globalChart?.is_active ? (
             <span className="inline-flex items-center gap-1.5 text-emerald-600 font-medium">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Live on storefront
+              {globalChart.name} is live as default
             </span>
-          ) : (
+          ) : globalChart ? (
             <span className="inline-flex items-center gap-1.5 text-amber-600 font-medium">
               <span className="w-2 h-2 rounded-full bg-amber-500" />
-              Storefront chart inactive
+              Default chart is inactive
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-red-600 font-medium">
+              <span className="w-2 h-2 rounded-full bg-red-500" />
+              No default chart set
             </span>
           )}
         </div>
@@ -260,337 +280,32 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
         </div>
       )}
 
-      {/* TAB 1: Global Size Chart (Compact 2-Column Dashboard on Desktop) */}
-      {activeTab === 'global' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-          {/* LEFT: Current Active Chart Live Card */}
-          <div className="lg:col-span-5 bg-panel rounded-2xl border border-cream-line/70 p-4 sm:p-5 shadow-sm space-y-3.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="p-1.5 rounded-lg bg-gold/10 text-gold-light border border-gold/20">
-                  <Globe className="w-4 h-4" />
-                </span>
-                <div>
-                  <h2 className="text-sm font-bold text-ink">Active Global Chart</h2>
-                  <p className="text-[11px] text-ink/50">Universal fallback for products</p>
-                </div>
-              </div>
-
-              {globalChart && (
-                <span
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
-                    globalChart.is_active
-                      ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                      : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
-                  }`}
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      globalChart.is_active ? 'bg-emerald-500' : 'bg-amber-500'
-                    }`}
-                  />
-                  {globalChart.is_active ? 'Active' : 'Hidden'}
-                </span>
-              )}
-            </div>
-
-            {/* Thumbnail Box */}
-            {currentPreviewImage ? (
-              <div className="space-y-2.5">
-                <div
-                  onClick={() =>
-                    setZoomModalUrl({
-                      url: currentPreviewImage,
-                      title: globalChart?.name || 'Global Size Chart',
-                    })
-                  }
-                  className="group relative w-full aspect-[4/3] rounded-xl border border-cream-line/80 overflow-hidden bg-cream-deep/60 cursor-pointer shadow-inner transition-all hover:border-gold/50"
-                  title="Click to zoom in"
-                >
-                  <Image
-                    src={currentPreviewImage}
-                    alt={globalChart?.name || 'Global Size Chart'}
-                    fill
-                    sizes="(max-width: 1024px) 100vw, 400px"
-                    className="object-contain p-2 transition-transform duration-300 group-hover:scale-105"
-                  />
-
-                  {/* Staged Tag if user uploaded a new pending one */}
-                  {stagedImageUrl && (
-                    <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-orange-600 text-white text-[10px] font-bold shadow-md uppercase tracking-wider flex items-center gap-1">
-                      <RefreshCw className="w-3 h-3 animate-spin" />
-                      Pending Save
-                    </div>
-                  )}
-
-                  {/* Hover Overlay */}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 backdrop-blur-[2px] transition-all flex flex-col items-center justify-center gap-1 text-white">
-                    <ZoomIn className="w-6 h-6 stroke-[2.2]" />
-                    <span className="text-xs font-semibold">Click to Zoom</span>
-                  </div>
-                </div>
-
-                {/* Details Strip */}
-                <div className="p-3 bg-cream-deep/50 rounded-xl border border-cream-line/50 space-y-1.5 text-xs">
-                  <div className="flex items-center justify-between text-ink/80">
-                    <span className="font-semibold truncate max-w-[180px]">
-                      {globalChart?.name || 'Global Size Chart'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setZoomModalUrl({
-                          url: currentPreviewImage,
-                          title: globalChart?.name || 'Global Size Chart',
-                        })
-                      }
-                      className="inline-flex items-center gap-1 text-gold-light hover:underline font-medium"
-                    >
-                      <Eye className="w-3 h-3" />
-                      Full View
-                    </button>
-                  </div>
-                  {globalChart?.updated_at && (
-                    <div className="text-[11px] text-ink/40 flex items-center justify-between">
-                      <span>Last updated</span>
-                      <span>{new Date(globalChart.updated_at).toLocaleDateString()}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              /* Empty state if no chart */
-              <div className="p-6 text-center rounded-xl border-2 border-dashed border-cream-line/80 bg-cream-deep/30 flex flex-col items-center justify-center gap-2">
-                <ImageIcon className="w-8 h-8 text-ink/30" />
-                <p className="text-xs font-semibold text-ink/70">No Global Size Chart Set</p>
-                <p className="text-[11px] text-ink/40 max-w-xs">
-                  Upload an image on the right panel to establish the storewide size chart.
-                </p>
-              </div>
-            )}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between px-1 gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-ink">All Stored Size Charts</h2>
+            <p className="text-[11px] text-ink/50">
+              Click the star on any chart to make it the storewide default.
+            </p>
           </div>
-
-          {/* RIGHT: Compact Update & Upload Form */}
-          <div className="lg:col-span-7 bg-panel rounded-2xl border border-cream-line/70 p-4 sm:p-5 shadow-sm space-y-4">
-            <div className="border-b border-cream-line/60 pb-3">
-              <h2 className="text-sm font-bold text-ink flex items-center gap-2">
-                <span>Configure Size Chart</span>
-                {stagedImageUrl && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-500/15 text-amber-600 border border-amber-500/30">
-                    Unsaved Image
-                  </span>
-                )}
-              </h2>
-              <p className="text-[11px] text-ink/50 mt-0.5">
-                Set chart title, upload a replacement diagram, and manage storefront visibility.
-              </p>
-            </div>
-
-            <div className="space-y-3.5">
-              {/* Chart Name */}
-              <div>
-                <label
-                  htmlFor="chart-name-input"
-                  className="block text-xs font-bold text-ink/80 mb-1"
-                >
-                  Chart Display Name
-                </label>
-                <input
-                  id="chart-name-input"
-                  type="text"
-                  value={chartName}
-                  onChange={(e) => setChartName(e.target.value)}
-                  placeholder="e.g. Standard Apparel Size Guide"
-                  className="w-full px-3.5 py-2 bg-cream-deep/50 border border-cream-line/70 rounded-xl text-xs sm:text-sm font-medium text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold transition-all"
-                />
-              </div>
-
-              {/* Upload Dropzone: Compact & Clean */}
-              <div>
-                <label className="block text-xs font-bold text-ink/80 mb-1">
-                  Upload Chart Image
-                </label>
-
-                {stagedImageUrl ? (
-                  /* Staged Image Mini Bar */
-                  <div className="flex items-center justify-between p-2.5 bg-cream-deep/60 rounded-xl border border-cream-line/70">
-                    <div className="flex items-center gap-2.5 overflow-hidden">
-                      <div className="relative w-12 h-12 rounded-lg border border-cream-line/80 overflow-hidden bg-panel shrink-0">
-                        <Image
-                          src={stagedImageUrl}
-                          alt="Staged"
-                          fill
-                          className="object-cover"
-                        />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-ink truncate">New Image Ready</p>
-                        <p className="text-[10px] text-ink/50">Click Save to make this live</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <ImageKitUploadWidget
-                        options={{
-                          maxFiles: 1,
-                          folder: 'rawflex/size-charts',
-                          clientAllowedFormats: ['jpg', 'jpeg', 'png', 'webp'],
-                        }}
-                        onSuccess={handleUploadSuccess}
-                        onOpen={() => setIsUploading(true)}
-                        onError={() => setIsUploading(false)}
-                        onClose={() => setIsUploading(false)}
-                      >
-                        {({ open }) => (
-                          <button
-                            type="button"
-                            onClick={() => open()}
-                            disabled={isUploading || isPending}
-                            className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-panel hover:bg-panel2 border border-cream-line text-ink/80 transition-colors"
-                          >
-                            Replace
-                          </button>
-                        )}
-                      </ImageKitUploadWidget>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setStagedImageUrl(null)
-                          setStagedPublicId(null)
-                        }}
-                        className="p-1.5 text-ink/50 hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors"
-                        title="Discard new upload"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  /* Compact Upload Dropzone */
-                  <ImageKitUploadWidget
-                    options={{
-                      maxFiles: 1,
-                      folder: 'rawflex/size-charts',
-                      clientAllowedFormats: ['jpg', 'jpeg', 'png', 'webp'],
-                    }}
-                    onSuccess={handleUploadSuccess}
-                    onOpen={() => setIsUploading(true)}
-                    onError={() => setIsUploading(false)}
-                    onClose={() => setIsUploading(false)}
-                  >
-                    {({ open }) => (
-                      <button
-                        type="button"
-                        onClick={() => open()}
-                        disabled={isUploading || isPending}
-                        className="w-full h-28 flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-cream-line hover:border-gold/60 bg-cream-deep/40 hover:bg-panel2/60 transition-all text-ink/70 group disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isUploading ? (
-                          <Loader2 className="w-5 h-5 animate-spin text-gold" />
-                        ) : (
-                          <div className="p-2 rounded-full bg-cream-deep group-hover:bg-gold/15 group-hover:text-gold transition-colors">
-                            <UploadCloud className="w-5 h-5" />
-                          </div>
-                        )}
-                        <span className="text-xs font-semibold text-ink group-hover:text-gold transition-colors">
-                          {isUploading ? 'Uploading image...' : 'Click to select size chart image'}
-                        </span>
-                        <span className="text-[10px] text-ink/40">
-                          PNG, JPG, or WEBP up to 15MB
-                        </span>
-                      </button>
-                    )}
-                  </ImageKitUploadWidget>
-                )}
-              </div>
-
-              {/* Active Toggle Switch */}
-              <div className="flex items-center justify-between p-3 bg-cream-deep/40 rounded-xl border border-cream-line/60">
-                <div>
-                  <h3 className="text-xs font-bold text-ink">Active on Storefront</h3>
-                  <p className="text-[11px] text-ink/50">
-                    When active, customers can open this chart on product pages.
-                  </p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                  <input
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={isActive}
-                    onChange={(e) => setIsActive(e.target.checked)}
-                    disabled={isPending}
-                  />
-                  <div className="w-10 h-5 bg-panel2 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
-                </label>
-              </div>
-
-              {/* Actions Footer */}
-              <div className="pt-2 flex items-center justify-between gap-3 border-t border-cream-line/60">
-                <span className="text-[11px] text-ink/40">
-                  {stagedImageUrl ? 'Changes not saved yet' : 'Ready to save'}
-                </span>
-
-                <div className="flex items-center gap-2">
-                  {stagedImageUrl && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStagedImageUrl(null)
-                        setStagedPublicId(null)
-                      }}
-                      disabled={isPending}
-                      className="px-3 py-2 text-xs font-semibold rounded-xl text-ink/60 hover:text-ink hover:bg-cream-deep transition-colors"
-                    >
-                      Reset
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={handleSaveGlobal}
-                    disabled={isPending || (!stagedImageUrl && !globalChart?.image_url)}
-                    className="admin-primary-action px-5 py-2 text-xs sm:text-sm rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                  >
-                    {isPending ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4 mr-1.5" />
-                        Save Size Chart
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={openCreateEditor}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-ink text-cream hover:bg-ink/90 transition-colors shadow-sm shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Create New Chart
+          </button>
         </div>
-      )}
 
-      {/* TAB 2: All Size Charts (Responsive Grid) */}
-      {activeTab === 'list' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between px-1">
-            <div>
-              <h2 className="text-sm font-bold text-ink">All Stored Size Charts</h2>
-              <p className="text-[11px] text-ink/50">Global and custom charts library</p>
-            </div>
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-cream-deep text-ink/70 border border-cream-line/60">
-              {charts.length} Total
-            </span>
-          </div>
-
-          {charts.length === 0 ? (
-            <div className="p-8 text-center rounded-2xl border-2 border-dashed border-cream-line bg-panel/40 space-y-2">
-              <ImageIcon className="w-8 h-8 mx-auto text-ink/30" />
-              <p className="text-xs font-semibold text-ink/70">No size charts created yet</p>
-              <p className="text-[11px] text-ink/40">
-                Switch to the "Global Size Chart" tab to configure your first chart.
-              </p>
+        {charts.length === 0 ? (
+          <div className="p-8 text-center rounded-2xl border-2 border-dashed border-cream-line bg-panel/40 space-y-2">
+            <ImageIcon className="w-8 h-8 mx-auto text-ink/30" />
+            <p className="text-xs font-semibold text-ink/70">No size charts created yet</p>
+            <p className="text-[11px] text-ink/40">
+              Click "Create New Chart" above to add your first one — the first chart you create automatically becomes
+              the storewide default.
+            </p>
             </div>
           ) : (
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
@@ -601,7 +316,7 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
                 >
                   {/* Thumbnail */}
                   <div
-                    onClick={() => setZoomModalUrl({ url: chart.image_url, title: chart.name })}
+                    onClick={() => setZoomModal({ images: chartImageUrls(chart), index: 0, title: chart.name })}
                     className="relative aspect-[16/10] bg-cream-deep/60 border-b border-cream-line/60 overflow-hidden cursor-pointer"
                   >
                     <Image
@@ -635,6 +350,14 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
                       <ZoomIn className="w-5 h-5" />
                     </div>
+
+                    {/* Image count badge — this card only previews the first image */}
+                    {(chart.image_urls?.length || 0) > 1 && (
+                      <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/70 text-white text-[10px] font-bold rounded-md shadow-sm flex items-center gap-1">
+                        <ImageIcon className="w-3 h-3" />
+                        {chart.image_urls!.length} Photos
+                      </div>
+                    )}
                   </div>
 
                   {/* Body & Actions */}
@@ -645,7 +368,7 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
                       </h3>
                       <div className="flex items-center justify-between text-[11px] text-ink/50 mt-1">
                         <span>{chart.is_active ? 'Active' : 'Inactive'}</span>
-                        <span>{new Date(chart.updated_at).toLocaleDateString()}</span>
+                        <span>{new Date(chart.updated_at).toLocaleDateString('en-IN')}</span>
                       </div>
                     </div>
 
@@ -653,7 +376,7 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
                       <button
                         type="button"
                         onClick={() =>
-                          setZoomModalUrl({ url: chart.image_url, title: chart.name })
+                          setZoomModal({ images: chartImageUrls(chart), index: 0, title: chart.name })
                         }
                         className="inline-flex items-center gap-1 text-[11px] font-semibold text-ink/70 hover:text-ink transition-colors"
                       >
@@ -661,45 +384,83 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
                         Preview
                       </button>
 
-                      {!chart.is_global ? (
+                      <div className="flex items-center gap-1">
                         <button
                           type="button"
-                          onClick={() => setDeleteConfirmId(chart.id)}
-                          className="p-1.5 text-ink/40 hover:text-red-600 hover:bg-red-500/10 rounded-lg transition-colors"
-                          title="Delete size chart"
+                          onClick={() => openEditEditor(chart)}
+                          className="p-1.5 text-ink/40 hover:text-ink hover:bg-ink/5 rounded-lg transition-colors"
+                          title="Edit size chart"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Pencil className="w-3.5 h-3.5" />
                         </button>
-                      ) : (
-                        <span className="text-[10px] font-medium text-gold">Primary</span>
-                      )}
+
+                        {chart.is_global ? (
+                          <span
+                            className="p-1.5 text-gold"
+                            title="This is the storewide default chart"
+                          >
+                            <Star className="w-3.5 h-3.5 fill-gold" />
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleSetGlobal(chart.id)}
+                            disabled={settingGlobalId === chart.id}
+                            className="p-1.5 text-ink/40 hover:text-gold hover:bg-gold/10 rounded-lg transition-colors disabled:opacity-50"
+                            title="Set as storewide default"
+                          >
+                            {settingGlobalId === chart.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Star className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        )}
+
+                        {!chart.is_global && (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteConfirmId(chart.id)}
+                            className="p-1.5 text-ink/40 hover:text-red-600 hover:bg-red-500/10 rounded-lg transition-colors"
+                            title="Delete size chart"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </div>
-      )}
+      </div>
 
       {/* LIGHTBOX / ZOOM MODAL */}
-      {zoomModalUrl && isMounted && typeof document !== 'undefined' && createPortal(
+      {zoomModal && isMounted && typeof document !== 'undefined' && createPortal(
         <div
-          onClick={() => setZoomModalUrl(null)}
-          className="fixed inset-0 z-[999999] flex items-center justify-center bg-white/55 p-3 sm:p-4 backdrop-blur-md animate-fade-in"
+          onClick={() => setZoomModal(null)}
+          className="fixed inset-0 z-[999999] flex items-center justify-center bg-white/55 p-1.5 sm:p-4 backdrop-blur-md animate-fade-in"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="relative bg-panel rounded-2xl border border-black shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden"
+            className="relative bg-panel rounded-2xl border border-black shadow-2xl max-w-3xl w-full max-h-[97vh] sm:max-h-[92vh] flex flex-col overflow-hidden"
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-cream-line/70">
+            <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 border-b border-cream-line/70">
               <div className="flex items-center gap-2">
                 <ImageIcon className="w-4 h-4 text-gold" />
-                <h3 className="text-sm font-bold text-ink">{zoomModalUrl.title}</h3>
+                <h3 className="text-sm font-bold text-ink">
+                  {zoomModal.title}
+                  {zoomModal.images.length > 1 && (
+                    <span className="text-ink/40 font-normal ml-1.5">
+                      ({zoomModal.index + 1}/{zoomModal.images.length})
+                    </span>
+                  )}
+                </h3>
               </div>
               <button
-                onClick={() => setZoomModalUrl(null)}
+                onClick={() => setZoomModal(null)}
                 className="p-1.5 text-ink/50 hover:text-ink hover:bg-cream-deep rounded-lg transition-colors"
                 title="Close"
               >
@@ -708,29 +469,77 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
             </div>
 
             {/* Modal Image Box */}
-            <div className="relative flex-1 min-h-[300px] sm:min-h-[460px] max-h-[75vh] bg-cream-deep/40 p-3 sm:p-4 flex items-center justify-center overflow-auto">
-              <div className="relative w-full h-full min-h-[280px] sm:min-h-[440px]">
+            <div className="relative flex-1 min-h-[420px] sm:min-h-[460px] max-h-[85vh] sm:max-h-[75vh] bg-cream-deep/40 p-1.5 sm:p-4 flex items-center justify-center overflow-auto">
+              <div className="relative w-full h-full min-h-[400px] sm:min-h-[440px]">
                 <Image
-                  src={zoomModalUrl.url}
-                  alt={zoomModalUrl.title}
+                  key={zoomModal.images[zoomModal.index]}
+                  src={zoomModal.images[zoomModal.index]}
+                  alt={zoomModal.title}
                   fill
                   className="object-contain"
                   sizes="100vw"
                   priority
                 />
               </div>
+
+              {/* Prev / Next */}
+              {zoomModal.images.length > 1 && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setZoomModal((prev) =>
+                        prev ? { ...prev, index: (prev.index - 1 + prev.images.length) % prev.images.length } : prev
+                      )
+                    }}
+                    className="absolute left-1 sm:left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/25 hover:bg-black/55 text-white shadow-sm transition-colors"
+                    title="Previous image"
+                  >
+                    <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setZoomModal((prev) => (prev ? { ...prev, index: (prev.index + 1) % prev.images.length } : prev))
+                    }}
+                    className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/25 hover:bg-black/55 text-white shadow-sm transition-colors"
+                    title="Next image"
+                  >
+                    <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </button>
+
+                  {/* Dots */}
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm px-2.5 py-1.5 rounded-full">
+                    {zoomModal.images.map((_, idx) => (
+                      <button
+                        key={idx}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setZoomModal((prev) => (prev ? { ...prev, index: idx } : prev))
+                        }}
+                        className={`rounded-full transition-all cursor-pointer ${
+                          idx === zoomModal.index ? 'w-4 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/50 hover:bg-white/80'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Modal Footer */}
-            <div className="flex items-center justify-between px-4 py-2.5 bg-cream-deep/40 border-t border-cream-line/60 text-xs text-ink/60">
-              <span>Press ESC or click outside to close</span>
+            <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-cream-deep/40 border-t border-cream-line/60 text-[11px] sm:text-xs text-ink/60">
+              <span className="hidden sm:inline">
+                Press ESC or click outside to close{zoomModal.images.length > 1 ? ' • ← → to navigate' : ''}
+              </span>
+              <span className="sm:hidden">Tap outside to close</span>
               <a
-                href={zoomModalUrl.url}
+                href={zoomModal.images[zoomModal.index]}
                 target="_blank"
                 rel="noreferrer"
-                className="font-semibold text-gold-light hover:underline"
+                className="font-semibold text-gold-light hover:underline shrink-0"
               >
-                Open Original in New Tab
+                Open Original
               </a>
             </div>
           </div>
@@ -777,6 +586,168 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
               >
                 {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                 Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* CREATE / EDIT LIBRARY CHART MODAL */}
+      {isEditorOpen && isMounted && typeof document !== 'undefined' && createPortal(
+        <div
+          onClick={closeEditor}
+          className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/70 p-3 sm:p-4 backdrop-blur-md animate-fade-in overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-panel rounded-2xl border border-cream-line/80 w-full max-w-lg my-auto shadow-2xl flex flex-col max-h-[92vh]"
+          >
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-cream-line/70 shrink-0">
+              <h3 className="text-sm font-bold text-ink">
+                {editorChart ? 'Edit Chart' : 'Create New Chart'}
+              </h3>
+              <button
+                type="button"
+                onClick={closeEditor}
+                disabled={editorSaving}
+                className="p-1.5 text-ink/40 hover:text-ink hover:bg-ink/5 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-4 overflow-y-auto">
+              {editorError && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-700 text-xs font-medium">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  {editorError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-ink/70 uppercase tracking-wider mb-1.5">
+                  Chart Name
+                </label>
+                <input
+                  type="text"
+                  value={editorName}
+                  onChange={(e) => setEditorName(e.target.value)}
+                  placeholder="e.g. Oversized Tees Chart"
+                  className="w-full px-3 py-2.5 text-sm rounded-xl border border-cream-line bg-white text-ink focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-ink/70 uppercase tracking-wider mb-1.5">
+                  Chart Images
+                </label>
+
+                {editorImages.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2 mb-2.5">
+                    {editorImages.map((img, idx) => (
+                      <div
+                        key={`${img.url}-${idx}`}
+                        className="group relative w-full aspect-[210/297] rounded-xl border border-cream-line overflow-hidden bg-cream-deep/60"
+                      >
+                        <Image src={img.url} alt={`Chart image #${idx + 1}`} fill className="object-cover" />
+                        <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-black/60 text-white text-[10px] font-bold pointer-events-none">
+                          {idx + 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeEditorImageAt(idx)}
+                          className="absolute top-1 right-1 p-1 rounded-md bg-red-600/90 hover:bg-red-600 text-white transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                        <div className="absolute bottom-1 left-1 right-1 flex items-center justify-between">
+                          <button
+                            type="button"
+                            onClick={() => moveEditorImage(idx, 'left')}
+                            disabled={idx === 0}
+                            className="p-1 rounded-md bg-black/60 hover:bg-black/80 text-white transition-colors disabled:opacity-0 disabled:pointer-events-none"
+                          >
+                            <ChevronLeft className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveEditorImage(idx, 'right')}
+                            disabled={idx === editorImages.length - 1}
+                            className="p-1 rounded-md bg-black/60 hover:bg-black/80 text-white transition-colors disabled:opacity-0 disabled:pointer-events-none"
+                          >
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <ImageKitUploadWidget
+                  options={{
+                    maxFiles: 1,
+                    folder: 'teenzos/size-charts',
+                    clientAllowedFormats: ['jpg', 'jpeg', 'png', 'webp'],
+                  }}
+                  onSuccess={(result: any) => {
+                    const url = result.url || result.info?.secure_url
+                    const fileId = result.fileId || result.info?.public_id
+                    setEditorImages((prev) => [...prev, { url, publicId: fileId || null }])
+                    setEditorUploading(false)
+                  }}
+                  onOpen={() => setEditorUploading(true)}
+                  onError={() => setEditorUploading(false)}
+                  onClose={() => setEditorUploading(false)}
+                >
+                  {({ open, isUploading: widgetUploading }) => (
+                    <button
+                      type="button"
+                      onClick={() => open()}
+                      disabled={editorUploading || widgetUploading}
+                      className="w-full h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-cream-line bg-cream-deep/40 text-ink/60 hover:border-gold hover:text-gold transition-all disabled:opacity-50"
+                    >
+                      {editorUploading || widgetUploading ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-gold" />
+                      ) : (
+                        <Plus className="w-4 h-4" />
+                      )}
+                      <span className="text-xs font-semibold">
+                        {editorImages.length === 0 ? 'Upload Image' : 'Add Another Image'}
+                      </span>
+                    </button>
+                  )}
+                </ImageKitUploadWidget>
+              </div>
+
+              <label className="flex items-center justify-between p-3 rounded-xl border border-cream-line/80 bg-cream-deep/30 cursor-pointer">
+                <span className="text-xs font-semibold text-ink/80">Active</span>
+                <input
+                  type="checkbox"
+                  checked={editorActive}
+                  onChange={(e) => setEditorActive(e.target.checked)}
+                  className="w-4 h-4 text-gold focus:ring-gold/30"
+                />
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-2 px-5 py-3.5 border-t border-cream-line/70 shrink-0">
+              <button
+                type="button"
+                onClick={closeEditor}
+                disabled={editorSaving}
+                className="px-3.5 py-2 text-xs font-semibold text-ink/70 hover:text-ink bg-cream-deep hover:bg-panel2 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveLibraryChart}
+                disabled={editorSaving}
+                className="px-4 py-2 text-xs font-bold text-white bg-ink hover:bg-ink/90 rounded-xl transition-colors flex items-center gap-1.5"
+              >
+                {editorSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                {editorChart ? 'Save Changes' : 'Create Chart'}
               </button>
             </div>
           </div>
