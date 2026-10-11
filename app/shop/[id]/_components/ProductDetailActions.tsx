@@ -398,7 +398,7 @@ export default function ProductDetailActions({
       {product.colors && product.colors.length > 0 ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+            <div className="flex items-center gap-1.5 text-sm lg:text-base font-semibold text-gray-900">
               <span className="text-gray-500 font-medium">Color:</span>
               <span className="text-gray-950 font-bold">{selectedColor || product.colors[0]?.name}</span>
             </div>
@@ -407,15 +407,15 @@ export default function ProductDetailActions({
               <button
                 type="button"
                 onClick={() => setShowSizeChart(true)}
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-800 hover:text-[#FF007A] transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 text-xs lg:text-sm font-bold text-gray-800 hover:text-[#FF007A] transition-colors cursor-pointer"
               >
-                <Ruler className="w-3.5 h-3.5 text-[#FF007A]" />
+                <Ruler className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-[#FF007A]" />
                 <span>Size Guide</span>
               </button>
             ) : null}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 lg:gap-3.5">
             {product.colors.map((c) => {
               const isSelected = selectedColor?.toLowerCase() === c.name.toLowerCase()
               return (
@@ -425,7 +425,7 @@ export default function ProductDetailActions({
                   onClick={() => onColorChange(c.name)}
                   aria-label={`Select color ${c.name}`}
                   title={c.name}
-                  className={`w-6 h-6 sm:w-6 sm:h-6 rounded-full border transition-all duration-200 relative ${
+                  className={`w-6 h-6 lg:w-8 lg:h-8 rounded-full border transition-all duration-200 relative ${
                     isSelected
                       ? 'ring-1 ring-offset-2 ring-gray-900 scale-110 shadow-sm'
                       : 'border-gray-300 hover:scale-105'
@@ -444,9 +444,9 @@ export default function ProductDetailActions({
           <button
             type="button"
             onClick={() => setShowSizeChart(true)}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-800 hover:text-[#FF007A] transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 text-xs lg:text-sm font-bold text-gray-800 hover:text-[#FF007A] transition-colors cursor-pointer"
           >
-            <Ruler className="w-3.5 h-3.5 text-[#FF007A]" />
+            <Ruler className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-[#FF007A]" />
             <span>Size Guide</span>
           </button>
         </div>
@@ -454,7 +454,7 @@ export default function ProductDetailActions({
 
       {/* 7. Size Selection */}
       <div className="pt-2 space-y-3">
-        <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+        <div className="flex items-center gap-1.5 text-sm lg:text-base font-semibold text-gray-900">
           <span className="text-gray-500 font-medium">Size :</span>
           <span className="text-gray-950 font-extrabold uppercase tracking-wide px-2 py-0.5 rounded bg-gray-100 border border-gray-200/90 shadow-2xs">
             {selectedSize}
@@ -462,7 +462,7 @@ export default function ProductDetailActions({
         </div>
 
         {/* Size Pills: Only pure size S, M, L, XL with increased comfortable height */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 lg:gap-3">
           {availableSizes.map((size) => {
             const isSelected = selectedSize.toUpperCase() === size.toUpperCase()
             return (
@@ -470,7 +470,7 @@ export default function ProductDetailActions({
                 key={size}
                 type="button"
                 onClick={() => setSelectedSize(size)}
-                className={`min-w-[40px] sm:min-w-[45px] h-9 sm:h-10 px-3.5 sm:px-4 rounded-[5px] text-xs sm:text-sm font-black transition-all duration-200 cursor-pointer flex items-center justify-center ${
+                className={`min-w-[40px] sm:min-w-[45px] lg:min-w-[56px] h-9 sm:h-10 lg:h-12 px-3.5 sm:px-4 lg:px-5 rounded-[5px] text-xs sm:text-sm lg:text-base font-black transition-all duration-200 cursor-pointer flex items-center justify-center ${
                   isSelected
                     ? 'border border-[#FF007A] text-[#FF007A] bg-[#FFF0F6]/90 shadow-sm scale-[1.03]'
                     : 'border border-gray-200 text-gray-700 hover:border-gray-400 bg-white hover:text-black hover:bg-gray-50/50'

@@ -196,7 +196,7 @@ function renderProductPage(
           </svg>
         </div>
 
-        <div className="max-w-wrap mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-5 lg:px-6 relative z-10">
           {/* Main Product Showcase Section */}
           <ProductViewSection
             product={{

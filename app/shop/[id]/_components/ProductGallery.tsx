@@ -216,12 +216,12 @@ export default function ProductGallery({
   }
 
   return (
-    <div className="flex flex-col md:flex-row gap-3 lg:gap-4 items-start w-full">
+    <div className="flex flex-col md:flex-row gap-3 items-start w-full">
       {/* Thumbnails (Vertical on desktop, Horizontal on mobile - 4 visible on mobile) */}
       {displayImages.length > 1 && (
         <div
           ref={thumbnailsContainerRef}
-          className="order-2 md:order-1 flex md:flex-col gap-2 sm:gap-2.5 md:gap-3.5 overflow-x-auto md:overflow-y-auto p-1 scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden w-full md:w-[78px] lg:w-[86px] md:max-h-[500px] lg:max-h-[520px] shrink-0"
+          className="order-2 md:order-1 flex md:flex-col gap-2 sm:gap-2.5 md:gap-3.5 overflow-x-auto md:overflow-y-auto p-1 scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden w-full md:w-[78px] lg:w-[86px] md:max-h-[820px] lg:max-h-[920px] shrink-0"
         >
           {displayImages.map((img, index) => {
             const isActive = activeIndex === index
@@ -234,7 +234,7 @@ export default function ProductGallery({
                 type="button"
                 onClick={() => setActiveIndex(index)}
                 aria-label={`Select image ${index + 1}`}
-                className={`relative flex-[0_0_calc((100%-24px)/4)] max-w-[86px] aspect-square sm:flex-none sm:w-[78px] sm:h-[78px] md:w-full md:h-[84px] lg:h-[86px] shrink-0 rounded-[5px] overflow-hidden transition-all duration-200 bg-white cursor-pointer ${
+                className={`relative flex-[0_0_calc((100%-24px)/4)] max-w-[86px] aspect-[2/3] sm:flex-none sm:w-[78px] md:w-full shrink-0 rounded-[5px] overflow-hidden transition-all duration-200 bg-white cursor-pointer ${
                   isActive
                     ? 'ring-2 ring-[#FF007A] ring-offset-2 ring-offset-white shadow-sm opacity-100 scale-[1.02]'
                     : 'border border-gray-200/90 hover:border-gray-400 opacity-60 hover:opacity-100'
@@ -261,7 +261,7 @@ export default function ProductGallery({
       )}
 
       {/* Main Image Showcase Card (Reduced height on desktop) */}
-      <div className="order-1 md:order-2 relative w-full flex-1 aspect-[1/1] sm:aspect-[4/4.3] md:aspect-[4/3.8] lg:aspect-[4/5.4] md:max-h-[480px] lg:max-h-[500px] rounded-[5px] overflow-hidden bg-white border border-gray-200/80 shadow-sm select-none group flex items-center justify-center">
+      <div className="order-1 md:order-2 relative w-full flex-1 aspect-[2/3] rounded-[5px] overflow-hidden bg-white border border-gray-200/80 shadow-sm select-none group flex items-center justify-center">
         {/* Badge Pill: Top-Left on both mobile and desktop - Only render if badge exists */}
         {badge && (
           <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 pointer-events-none">
@@ -340,7 +340,7 @@ export default function ProductGallery({
                   alt={`${productName} - Image ${index + 1}`}
                   fill
                   loader={productLoaderFor(img)}
-                  sizes="(min-width: 1024px) 580px, (min-width: 768px) 50vw, 100vw"
+                  sizes="(min-width: 1024px) 760px, (min-width: 768px) 60vw, 100vw"
                   priority={index === 0}
                   style={activeIndex === index ? zoomStyle : undefined}
                   loading={index === 0 ? undefined : 'lazy'}

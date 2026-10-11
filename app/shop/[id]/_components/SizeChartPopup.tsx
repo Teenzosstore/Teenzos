@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import { X, Loader2, Maximize2, Minimize2, ChevronLeft, ChevronRight } from 'lucide-react'
 
@@ -174,23 +175,13 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrls, title = 'Si
     }
   }, [isPanning, panStart, zoomLevel, imageBox])
 
-  // Touch handlers
-  const touchSwipeStartX = useRef<number | null>(null)
-
+  // Touch panning while zoomed (React handlers).
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (isZoomed && zoomLevel > 1) {
-      if (e.touches.length === 1) {
-        const touch = e.touches[0]
-        setIsPanning(true)
-        setPanStart({ x: touch.clientX - panPosition.x, y: touch.clientY - panPosition.y })
-      }
-      return
-    }
-    // Not zoomed: track the touch for a swipe gesture between images.
-    if (hasMultiple && e.touches.length === 1) {
-      touchSwipeStartX.current = e.touches[0].clientX
-    }
-  }, [isZoomed, zoomLevel, panPosition, hasMultiple])
+    if (!(isZoomed && zoomLevel > 1) || e.touches.length !== 1) return
+    const touch = e.touches[0]
+    setIsPanning(true)
+    setPanStart({ x: touch.clientX - panPosition.x, y: touch.clientY - panPosition.y })
+  }, [isZoomed, zoomLevel, panPosition])
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!isPanning || e.touches.length !== 1) return
@@ -204,25 +195,72 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrls, title = 'Si
       x: Math.max(-boundX, Math.min(boundX, deltaX)),
       y: Math.max(-boundY, Math.min(boundY, deltaY)),
     })
-    e.preventDefault()
   }, [isPanning, panStart, zoomLevel, imageBox])
 
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (isPanning) {
-      setIsPanning(false)
-      return
+  const handleTouchEnd = useCallback(() => {
+    if (isPanning) setIsPanning(false)
+  }, [isPanning])
+
+  // Swipe between images when not zoomed. Native listeners, not React's: React registers
+  // touchmove as passive, so it can't preventDefault a horizontal drag and the browser may
+  // claim the gesture. The offset lives in a ref so touchend always sees the final value.
+  const touchSwipeStart = useRef<{ x: number; y: number } | null>(null)
+  const swipeAxis = useRef<'x' | 'y' | null>(null)
+  const swipeOffsetRef = useRef(0)
+  const [swipeOffset, setSwipeOffset] = useState(0)
+
+  useEffect(() => {
+    const el = wrapperRef.current
+    if (!isOpen || !el || !hasMultiple || isZoomed) return
+
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return
+      touchSwipeStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+      swipeAxis.current = null
     }
-    // Swipe-to-navigate when not zoomed.
-    if (hasMultiple && touchSwipeStartX.current !== null) {
-      const endX = e.changedTouches[0]?.clientX ?? touchSwipeStartX.current
-      const delta = endX - touchSwipeStartX.current
-      if (Math.abs(delta) > 50) {
-        if (delta < 0) goNext()
-        else goPrev()
+
+    const onMove = (e: TouchEvent) => {
+      const start = touchSwipeStart.current
+      if (!start || e.touches.length !== 1) return
+      const dx = e.touches[0].clientX - start.x
+      const dy = e.touches[0].clientY - start.y
+      if (!swipeAxis.current) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return
+        swipeAxis.current = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'
       }
-      touchSwipeStartX.current = null
+      if (swipeAxis.current === 'x') {
+        e.preventDefault()
+        swipeOffsetRef.current = dx
+        setSwipeOffset(dx)
+      }
     }
-  }, [isPanning, hasMultiple, goNext, goPrev])
+
+    const onEnd = () => {
+      if (touchSwipeStart.current && swipeAxis.current === 'x') {
+        const threshold = Math.min(60, (el.clientWidth || 300) * 0.18)
+        const offset = swipeOffsetRef.current
+        if (offset <= -threshold) goNext()
+        else if (offset >= threshold) goPrev()
+      }
+      touchSwipeStart.current = null
+      swipeAxis.current = null
+      swipeOffsetRef.current = 0
+      setSwipeOffset(0)
+    }
+
+    el.addEventListener('touchstart', onStart, { passive: true })
+    el.addEventListener('touchmove', onMove, { passive: false })
+    el.addEventListener('touchend', onEnd)
+    el.addEventListener('touchcancel', onEnd)
+    return () => {
+      el.removeEventListener('touchstart', onStart)
+      el.removeEventListener('touchmove', onMove)
+      el.removeEventListener('touchend', onEnd)
+      el.removeEventListener('touchcancel', onEnd)
+    }
+  }, [isOpen, hasMultiple, isZoomed, imageError, goNext, goPrev])
+
+  const swipeTouchAction = isZoomed && zoomLevel > 1 ? 'none' : 'pan-y'
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -245,24 +283,26 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrls, title = 'Si
     }
   }, [isZoomed, resetZoom])
 
-  if (!isOpen || imageUrls.length === 0) return null
+  if (!isOpen || imageUrls.length === 0 || typeof document === 'undefined') return null
 
-  return (
+  // Portaled to <body>: the page wrapper is a `relative z-10` stacking context, and the
+  // fixed header/announcement bar sit at z-[99999]/z-[100000], so the popup must escape both.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm select-none"
+      className="fixed inset-0 z-[100010] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm select-none"
       onClick={onClose}
       onDragStart={(e) => e.preventDefault()}
     >
       <div
         ref={containerRef}
-        className={`relative w-auto max-w-[92vw] sm:max-w-[480px] md:max-w-[500px] overflow-hidden transition-all duration-300 rounded-[5px] flex items-center justify-center select-none ${
+        className={`relative w-auto max-w-[94vw] sm:max-w-[640px] md:max-w-[720px] overflow-hidden transition-all duration-300 rounded-[5px] flex items-center justify-center select-none ${
           isZoomed ? 'fixed inset-0 max-w-full max-h-full z-[60] rounded-none' : ''
         }`}
         onClick={(e) => e.stopPropagation()}
         onDragStart={(e) => e.preventDefault()}
       >
         {/* Image Content - with zoom/pan controls */}
-        <div className={`relative w-full ${isZoomed ? 'h-full' : 'max-h-[52vh] sm:max-h-[58vh]'} flex items-center justify-center bg-transparent rounded-[5px]`}>
+        <div className={`relative w-full ${isZoomed ? 'h-full' : 'max-h-[82vh] sm:max-h-[88vh]'} flex items-center justify-center bg-transparent rounded-[5px]`}>
           {imageError ? (
             <div className="flex flex-col items-center justify-center text-center text-white/80 p-4">
               <p className="font-medium mb-2">Failed to load size chart image</p>
@@ -280,7 +320,12 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrls, title = 'Si
             <div
               ref={wrapperRef}
               className="relative inline-flex items-center justify-center max-w-full max-h-full select-none"
+              style={{ touchAction: swipeTouchAction }}
               onDragStart={(e) => e.preventDefault()}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchEnd}
             >
               {!imageLoaded && (
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -300,16 +345,16 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrls, title = 'Si
                   e.preventDefault()
                   return false
                 }}
-                className={`max-w-full max-h-[50vh] sm:max-h-[56vh] w-auto h-auto object-contain rounded-[5px] select-none ${
+                className={`max-w-full max-h-[80vh] sm:max-h-[86vh] w-auto h-auto object-contain rounded-[5px] select-none ${
                   isZoomed && zoomLevel > 1 ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default'
                 } ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                 style={{
-                  transform: `scale(${zoomLevel}) translate(${panPosition.x / zoomLevel}px, ${panPosition.y / zoomLevel}px)`,
+                  transform: `scale(${zoomLevel}) translate(${(panPosition.x + swipeOffset) / zoomLevel}px, ${panPosition.y / zoomLevel}px)`,
                   transformOrigin: 'center center',
-                  transition: isPanning ? 'none' : 'transform 0.2s ease-out, opacity 0.3s ease-out',
+                  transition: isPanning || swipeOffset !== 0 ? 'none' : 'transform 0.2s ease-out, opacity 0.3s ease-out',
                   userSelect: 'none',
                   WebkitUserSelect: 'none',
-                  touchAction: isZoomed && zoomLevel > 1 ? 'none' : 'auto',
+                  touchAction: swipeTouchAction,
                   WebkitUserDrag: 'none',
                 } as React.CSSProperties}
                 onLoad={() => {
@@ -323,9 +368,6 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrls, title = 'Si
                 }}
                 onWheel={handleWheel}
                 onMouseDown={handleMouseDown}
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
                 onDoubleClick={handleDoubleClick}
                 priority
               />
@@ -414,6 +456,7 @@ export default function SizeChartPopup({ isOpen, onClose, imageUrls, title = 'Si
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

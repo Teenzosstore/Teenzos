@@ -113,9 +113,9 @@ export default function ProductViewSection({
       />
 
       {/* 2. Main Product Showcase (Left: Gallery, Right: Details) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-8 lg:gap-10 items-start">
         {/* Left Column: Vertical Gallery & Showcase */}
-        <div className="lg:col-span-6 w-full">
+        <div className="w-full">
           <ProductGallery
             images={displayedImageUrls}
             productName={product.name}
@@ -126,7 +126,7 @@ export default function ProductViewSection({
         </div>
 
         {/* Right Column: Product Info & Actions */}
-        <div className="lg:col-span-6 w-full">
+        <div className="w-full">
           <ProductDetailActions
             product={{
               id: product.id,
