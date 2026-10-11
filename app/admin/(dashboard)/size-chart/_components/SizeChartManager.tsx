@@ -217,7 +217,7 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
       {/* Top Header & Quick Stats */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-panel p-3 sm:p-3.5 rounded-2xl border border-cream-line/70 shadow-sm">
         <div className="flex items-center gap-2.5">
-          <span className="p-1.5 rounded-lg bg-gold/10 text-gold-light border border-gold/20">
+          <span className="p-1.5 rounded-lg bg-orange/10 text-orange-dark border border-orange/20">
             <Layers className="w-4 h-4" />
           </span>
           <div>
@@ -330,8 +330,9 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
                     {/* Badges */}
                     <div className="absolute top-2 left-2 flex items-center gap-1.5">
                       {chart.is_global ? (
-                        <span className="px-2 py-0.5 bg-gold text-white text-[10px] font-bold rounded-md shadow-sm">
-                          Global
+                        <span className="px-2 py-0.5 bg-orange text-white text-[10px] font-bold rounded-md shadow-sm flex items-center gap-0.5">
+                          <Star className="w-2.5 h-2.5 fill-white" />
+                          Default
                         </span>
                       ) : (
                         <span className="px-2 py-0.5 bg-ink/70 text-cream text-[10px] font-semibold rounded-md shadow-sm">
@@ -396,17 +397,17 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
 
                         {chart.is_global ? (
                           <span
-                            className="p-1.5 text-gold"
+                            className="p-1.5 text-orange"
                             title="This is the storewide default chart"
                           >
-                            <Star className="w-3.5 h-3.5 fill-gold" />
+                            <Star className="w-3.5 h-3.5 fill-orange" />
                           </span>
                         ) : (
                           <button
                             type="button"
                             onClick={() => handleSetGlobal(chart.id)}
                             disabled={settingGlobalId === chart.id}
-                            className="p-1.5 text-ink/40 hover:text-gold hover:bg-gold/10 rounded-lg transition-colors disabled:opacity-50"
+                            className="p-1.5 text-ink/40 hover:text-orange hover:bg-orange/10 rounded-lg transition-colors disabled:opacity-50"
                             title="Set as storewide default"
                           >
                             {settingGlobalId === chart.id ? (
@@ -449,7 +450,7 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
             {/* Modal Header */}
             <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 border-b border-cream-line/70">
               <div className="flex items-center gap-2">
-                <ImageIcon className="w-4 h-4 text-gold" />
+                <ImageIcon className="w-4 h-4 text-orange" />
                 <h3 className="text-sm font-bold text-ink">
                   {zoomModal.title}
                   {zoomModal.images.length > 1 && (
@@ -537,7 +538,7 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
                 href={zoomModal.images[zoomModal.index]}
                 target="_blank"
                 rel="noreferrer"
-                className="font-semibold text-gold-light hover:underline shrink-0"
+                className="font-semibold text-orange-light hover:underline shrink-0"
               >
                 Open Original
               </a>
@@ -634,7 +635,7 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
                   value={editorName}
                   onChange={(e) => setEditorName(e.target.value)}
                   placeholder="e.g. Oversized Tees Chart"
-                  className="w-full px-3 py-2.5 text-sm rounded-xl border border-cream-line bg-white text-ink focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold"
+                  className="w-full px-3 py-2.5 text-sm rounded-xl border border-cream-line bg-white text-ink focus:outline-none focus:ring-2 focus:ring-orange/20 focus:border-orange"
                 />
               </div>
 
@@ -705,10 +706,10 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
                       type="button"
                       onClick={() => open()}
                       disabled={editorUploading || widgetUploading}
-                      className="w-full h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-cream-line bg-cream-deep/40 text-ink/60 hover:border-gold hover:text-gold transition-all disabled:opacity-50"
+                      className="w-full h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-cream-line bg-cream-deep/40 text-ink/60 hover:border-orange hover:text-orange transition-all disabled:opacity-50"
                     >
                       {editorUploading || widgetUploading ? (
-                        <Loader2 className="w-4 h-4 animate-spin text-gold" />
+                        <Loader2 className="w-4 h-4 animate-spin text-orange" />
                       ) : (
                         <Plus className="w-4 h-4" />
                       )}
@@ -726,7 +727,7 @@ export default function SizeChartManager({ initialCharts = [] }: SizeChartManage
                   type="checkbox"
                   checked={editorActive}
                   onChange={(e) => setEditorActive(e.target.checked)}
-                  className="w-4 h-4 text-gold focus:ring-gold/30"
+                  className="w-4 h-4 text-orange focus:ring-orange/30"
                 />
               </label>
             </div>
