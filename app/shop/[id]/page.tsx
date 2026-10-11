@@ -270,7 +270,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
   const PRODUCT_DETAIL_SELECT = `
     id, name, slug, category_id, is_active, badge, rating, review_count, short_description, description, featured_image_url, color_group_id, color_name, color_hex,
-    use_global_size_chart, size_chart_image_url, size_chart_cloudinary_public_id,
+    use_global_size_chart, size_chart_image_url, size_chart_cloudinary_public_id, size_chart_id,
     product_images ( image_url, color_name ),
     product_variants ( id, variant_name, price, original_price, stock_quantity, is_active ),
     product_information ( label, value, display_order )
@@ -375,8 +375,10 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   }
 
   // Ensure size chart is null if explicitly disabled on this product
+  // (but not when the product picked a named chart from the library via size_chart_id)
   if (
     productData &&
+    !productData.size_chart_id &&
     productData.use_global_size_chart === false &&
     (!productData.size_chart_image_url || productData.size_chart_image_url === 'disabled')
   ) {
