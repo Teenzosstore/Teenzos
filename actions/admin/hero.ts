@@ -287,11 +287,16 @@ export async function updateHeroSlide(
     button_text?: string
     button_link?: string
     display_order?: number
+    image_url?: string
   }
 ) {
   const admin = await requireAdmin()
   if (admin.ok === false) return { success: false, error: admin.error }
   const supabase = admin.adminClient
+
+  if (fields.image_url !== undefined && !fields.image_url.trim()) {
+    return { success: false, error: 'Slide image cannot be empty.' }
+  }
 
   const { error } = await supabase
     .from('hero_slides')

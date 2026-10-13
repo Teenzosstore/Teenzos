@@ -10,7 +10,11 @@ import CustomerReviewsSection from "@/components/CustomerReviewsSection";
 import NewsletterCTA from "@/components/NewsletterCTA";
 import Footer from "@/components/Footer";
 import ShoppableVideoSection from "@/components/ShoppableVideoSection";
-import { getHomeShoppableVideos, videoSectionSettingsFromRow } from "@/lib/shoppableVideos";
+import {
+  getHomeShoppableVideos,
+  videoSectionSettingsFromRow,
+  type VideoSectionPlacement,
+} from "@/lib/shoppableVideos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { selectDisplayVariant } from "@/lib/productVariants";
 import { productMatchesCategory, slugify } from "@/lib/shopProducts";
@@ -244,14 +248,15 @@ export default async function Home() {
   const oversizedSettings = oversizedSectionSettings(settingsData);
   const lookbookImages = lookbookImagesError ? undefined : lookbookImagesData || [];
   const videoSection = videoSectionSettingsFromRow(settingsData);
-  const videoSectionNode = (
-    <ShoppableVideoSection
-      videos={shoppableVideos}
-      title={videoSection.title}
-      subtitle={videoSection.subtitle}
-      instagramUrl={videoSection.instagramUrl || undefined}
-    />
-  );
+  const videoAt = (slot: VideoSectionPlacement) =>
+    videoSection.placement === slot ? (
+      <ShoppableVideoSection
+        videos={shoppableVideos}
+        title={videoSection.title}
+        subtitle={videoSection.subtitle}
+        instagramUrl={videoSection.instagramUrl || undefined}
+      />
+    ) : null;
 
   return (
     <main className="overflow-x-hidden">
@@ -261,16 +266,23 @@ export default async function Home() {
         backgroundImages={showHomeBanner ? homeBannerImages : []}
         leftText={heroText}
       />
+      {videoAt("after_hero")}
       <TrustBar />
+      {videoAt("after_trust_bar")}
       <Categories categories={categories} />
-      {videoSection.placement === "before_products" && videoSectionNode}
+      {videoAt("before_products")}
       <TrendingNow initialProducts={products} />
-      {videoSection.placement === "after_products" && videoSectionNode}
+      {videoAt("after_products")}
       <OversizedPromo />
+      {videoAt("after_oversized")}
       <WhyTeenzos />
+      {videoAt("after_why")}
       <RealStories />
+      {videoAt("after_stories")}
       <CustomerReviewsSection reviews={reviewsData || []} />
+      {videoAt("after_reviews")}
       <NewsletterCTA />
+      {videoAt("after_newsletter")}
       <Footer />
     </main>
   );

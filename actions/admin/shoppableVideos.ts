@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/adminAuth'
 import {
   MAX_SHOPPABLE_VIDEOS,
+  normalizeVideoPlacement,
   videoSectionSettingsFromRow,
   type VideoSectionPlacement,
   type VideoSectionSettings,
@@ -85,7 +86,7 @@ export async function updateVideoSectionSettings(fields: {
   const videoSection = {
     title: fields.title.trim().slice(0, 80),
     subtitle: fields.subtitle.trim().slice(0, 200),
-    placement: fields.placement === 'before_products' ? 'before_products' : 'after_products',
+    placement: normalizeVideoPlacement(fields.placement),
     instagram_url: (fields.instagramUrl || '').trim().slice(0, 200),
   }
 

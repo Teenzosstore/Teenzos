@@ -1,6 +1,29 @@
 import { selectDisplayVariant } from '@/lib/productVariants'
 
-export type VideoSectionPlacement = 'before_products' | 'after_products'
+// Each slot is the homepage section the video section is rendered right after,
+// in homepage order. 'before_products' / 'after_products' keep their original
+// stored values so existing saved settings stay valid.
+export const VIDEO_SECTION_PLACEMENTS = [
+  { value: 'after_hero', after: 'Hero Banner' },
+  { value: 'after_trust_bar', after: 'Trust Bar' },
+  { value: 'before_products', after: 'Shop by Category' },
+  { value: 'after_products', after: 'Trending Products' },
+  { value: 'after_oversized', after: 'Oversized Promo' },
+  { value: 'after_why', after: 'Why TeenZos' },
+  { value: 'after_stories', after: 'Real Stories' },
+  { value: 'after_reviews', after: 'Customer Reviews' },
+  { value: 'after_newsletter', after: 'Newsletter' },
+] as const
+
+export type VideoSectionPlacement = (typeof VIDEO_SECTION_PLACEMENTS)[number]['value']
+
+export const DEFAULT_VIDEO_PLACEMENT: VideoSectionPlacement = 'after_products'
+
+export function normalizeVideoPlacement(value: unknown): VideoSectionPlacement {
+  return VIDEO_SECTION_PLACEMENTS.some((p) => p.value === value)
+    ? (value as VideoSectionPlacement)
+    : DEFAULT_VIDEO_PLACEMENT
+}
 
 export type VideoSectionSettings = {
   title: string
@@ -19,7 +42,7 @@ export function videoSectionSettingsFromRow(settings: any): VideoSectionSettings
   return {
     title: String(source.title || ''),
     subtitle: String(source.subtitle || ''),
-    placement: source.placement === 'before_products' ? 'before_products' : 'after_products',
+    placement: normalizeVideoPlacement(source.placement),
     instagramUrl: String(source.instagram_url || ''),
   }
 }

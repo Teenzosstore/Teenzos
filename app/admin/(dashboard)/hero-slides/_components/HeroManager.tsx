@@ -175,6 +175,7 @@ export function HeroManager({
         subtitle: editingSlide.subtitle,
         button_text: editingSlide.button_text,
         button_link: editingSlide.button_link,
+        image_url: editingSlide.image_url,
       })
 
       if (res.success) {
@@ -895,6 +896,53 @@ export function HeroManager({
                 </div>
 
                 <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                      Product Image
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <div className="relative h-24 w-24 shrink-0 bg-[#F1F1EF] rounded-xl overflow-hidden">
+                        {editingSlide.image_url ? (
+                          <Image
+                            src={editingSlide.image_url}
+                            alt={editingSlide.title || 'Hero Drop'}
+                            fill
+                            unoptimized
+                            className="object-contain p-1.5"
+                          />
+                        ) : null}
+                      </div>
+                      <ImageKitUploadWidget
+                        options={{
+                          maxFiles: 1,
+                          folder: 'teenzos/hero-slides',
+                          clientAllowedFormats: ['jpg', 'jpeg', 'png', 'webp'],
+                        }}
+                        onSuccess={(result) => {
+                          const url = result.url || result.info?.secure_url
+                          if (url) setEditingSlide((prev: any) => (prev ? { ...prev, image_url: url } : prev))
+                        }}
+                      >
+                        {({ open, isUploading }) => (
+                          <button
+                            type="button"
+                            onClick={() => open()}
+                            disabled={isUploading}
+                            className="flex-1 flex flex-col items-center justify-center gap-1 h-24 rounded-xl border-2 border-dashed border-gray-200 text-center px-2 hover:border-pink hover:text-pink transition-colors disabled:opacity-60"
+                          >
+                            <UploadCloud className="w-6 h-6 text-pink" />
+                            <span className="text-xs font-bold text-gray-900">
+                              {isUploading ? 'Uploading...' : 'Change Image'}
+                            </span>
+                            <span className="text-[10px] text-gray-400">
+                              PNG with transparent background recommended
+                            </span>
+                          </button>
+                        )}
+                      </ImageKitUploadWidget>
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1">
                       Product Name

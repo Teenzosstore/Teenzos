@@ -9,14 +9,26 @@ import {
   Check,
   ChevronDown,
   ExternalLink,
+  Image as ImageIcon,
+  LayoutGrid,
   Loader2,
+  Mail,
   Package,
+  PanelBottom,
+  Plus,
   Search,
   Settings2,
+  ShieldCheck,
+  Shirt,
+  Sparkles,
+  Star,
   Trash2,
+  TrendingUp,
   Upload,
+  Users,
   Video,
   X,
+  type LucideIcon,
 } from 'lucide-react'
 import { VideoUploadButton } from '@/components/admin/VideoUploadButton'
 import {
@@ -29,9 +41,27 @@ import {
   type AdminShoppableVideo,
   type ProductOption,
 } from '@/actions/admin/shoppableVideos'
-import { MAX_SHOPPABLE_VIDEOS, type VideoSectionSettings } from '@/lib/shoppableVideos'
+import {
+  MAX_SHOPPABLE_VIDEOS,
+  VIDEO_SECTION_PLACEMENTS,
+  type VideoSectionPlacement,
+  type VideoSectionSettings,
+} from '@/lib/shoppableVideos'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
+
+// Icon for the homepage section each placement slot comes after.
+const PLACEMENT_ICONS: Record<VideoSectionPlacement, LucideIcon> = {
+  after_hero: ImageIcon,
+  after_trust_bar: ShieldCheck,
+  before_products: LayoutGrid,
+  after_products: TrendingUp,
+  after_oversized: Shirt,
+  after_why: Sparkles,
+  after_stories: Users,
+  after_reviews: Star,
+  after_newsletter: Mail,
+}
 
 const inputClass =
   'w-full px-3 py-2.5 text-sm rounded-xl border border-cream-line bg-cream-deep text-ink focus:outline-none focus:ring-1 focus:ring-pink focus:border-pink transition-all'
@@ -420,34 +450,87 @@ export function VideoSectionManager({
         </div>
 
         <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-ink/60 mb-2">
-            Position on homepage
-          </label>
-          <div className="grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap">
-            {(
-              [
-                ['before_products', 'Before products'],
-                ['after_products', 'After products'],
-              ] as const
-            ).map(([value, label]) => (
-              <label
-                key={value}
-                className={`flex items-center justify-center sm:justify-start gap-2 px-2.5 sm:px-4 py-2.5 sm:py-2 rounded-xl border cursor-pointer text-xs sm:text-sm font-semibold text-center whitespace-nowrap transition-all ${
-                  settings.placement === value
-                    ? 'border-ink bg-ink text-white'
-                    : 'border-cream-line text-ink/60 hover:bg-cream-deep'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="placement"
-                  checked={settings.placement === value}
-                  onChange={() => setSettings({ ...settings, placement: value })}
-                  className="sr-only"
-                />
-                {label}
+          <div className="flex flex-wrap items-end justify-between gap-2 mb-3 max-w-md">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-ink/60">
+                Position on homepage
               </label>
-            ))}
+              <p className="text-[11px] text-ink/50 mt-0.5">
+                Tap a <span className="font-bold text-ink/70">+</span> between sections to move the video there.
+              </p>
+            </div>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-pink/10 text-pink text-[11px] font-bold">
+              <Video className="w-3.5 h-3.5" />
+              After {VIDEO_SECTION_PLACEMENTS.find((p) => p.value === settings.placement)?.after}
+            </span>
+          </div>
+
+          {/* Mini homepage preview: sections top to bottom, with a slot between each */}
+          <div className="max-w-md rounded-2xl border border-cream-line bg-panel shadow-sm overflow-hidden">
+            <div className="flex items-center gap-1.5 px-3 py-2 bg-cream-deep border-b border-cream-line">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#FF5F57]" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[#FEBC2E]" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[#28C840]" />
+              <span className="ml-2 flex-1 truncate rounded-md bg-panel border border-cream-line px-2 py-0.5 text-[10px] font-medium text-ink/40">
+                teenzosstore.com
+              </span>
+            </div>
+
+            <div className="p-3">
+              {VIDEO_SECTION_PLACEMENTS.map(({ value, after }, idx) => {
+                const Icon = PLACEMENT_ICONS[value]
+                const isSelected = settings.placement === value
+                return (
+                  <div key={value}>
+                    <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-cream-deep/70">
+                      <span className="w-5 text-[10px] font-bold text-ink/30 tabular-nums">
+                        {String(idx + 1).padStart(2, '0')}
+                      </span>
+                      <Icon className="w-3.5 h-3.5 text-ink/40 shrink-0" />
+                      <span className="text-xs font-semibold text-ink/70 truncate">{after}</span>
+                    </div>
+
+                    {isSelected ? (
+                      <div className="my-2 rounded-xl bg-gradient-to-br from-pink to-pink-light p-3 text-white shadow-md ring-4 ring-pink/15">
+                        <div className="flex items-center gap-2 text-xs font-bold">
+                          <Video className="w-4 h-4 shrink-0" />
+                          Video Section
+                          <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold">
+                            <Check className="w-3 h-3" />
+                            Showing here
+                          </span>
+                        </div>
+                        <div className="mt-2.5 grid grid-cols-4 gap-1.5">
+                          {[0, 1, 2, 3].map((i) => (
+                            <span key={i} className="aspect-[9/14] rounded-md bg-white/25" />
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setSettings({ ...settings, placement: value })}
+                        aria-label={`Show video section after ${after}`}
+                        className="group flex w-full items-center gap-2 py-1.5"
+                      >
+                        <span className="h-0 flex-1 border-t border-dashed border-cream-line transition-colors group-hover:border-pink" />
+                        <span className="inline-flex items-center gap-1 rounded-full border border-cream-line bg-panel px-1.5 py-0.5 text-[10px] font-bold text-ink/35 transition-colors group-hover:border-pink group-hover:bg-pink group-hover:text-white">
+                          <Plus className="w-3 h-3" />
+                          <span className="hidden group-hover:inline">Place here</span>
+                        </span>
+                        <span className="h-0 flex-1 border-t border-dashed border-cream-line transition-colors group-hover:border-pink" />
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+
+              <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-ink/5">
+                <span className="w-5" />
+                <PanelBottom className="w-3.5 h-3.5 text-ink/30 shrink-0" />
+                <span className="text-xs font-semibold text-ink/40">Footer</span>
+              </div>
+            </div>
           </div>
         </div>
 
