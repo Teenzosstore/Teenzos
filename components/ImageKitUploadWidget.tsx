@@ -111,6 +111,15 @@ export function ImageKitUploadWidget({
 
     const maxSizeBytes = options.maxFileSize || 15 * 1024 * 1024 // 15MB default
 
+    const publicKey = process.env.NEXT_PUBLIC_IMAGEKIT_PUBLIC_KEY
+    if (!publicKey) {
+      const msg = 'ImageKit public key is not configured (NEXT_PUBLIC_IMAGEKIT_PUBLIC_KEY).'
+      alert(msg)
+      onError?.(new Error(msg))
+      onClose?.()
+      return
+    }
+
     // Signal that upload is actually beginning now that file is selected
     onOpen?.()
     setIsUploading(true)
@@ -134,13 +143,27 @@ export function ImageKitUploadWidget({
           continue
         }
 
+        // Upload straight from the browser to ImageKit with a short-lived
+        // signature. Sending the file through our own API route hits the
+        // serverless request body cap (~4.5-6MB) and fails with a 413.
+        // Signature tokens are single-use, so fetch a fresh one per file.
+        const authResponse = await fetch('/api/imagekit/auth', { cache: 'no-store' })
+        const auth = await authResponse.json().catch(() => ({}))
+        if (!authResponse.ok || !auth.token) {
+          throw new Error(auth.error || 'Could not get an upload signature. Are you logged in as admin?')
+        }
+
         const formData = new FormData()
         formData.append('file', file)
         formData.append('fileName', file.name)
         formData.append('folder', folder)
+        formData.append('useUniqueFileName', 'true')
+        formData.append('publicKey', publicKey)
+        formData.append('signature', auth.signature)
+        formData.append('expire', String(auth.expire))
+        formData.append('token', auth.token)
 
-        // Upload through fast, secure server endpoint
-        const uploadResponse = await fetch('/api/imagekit/upload', {
+        const uploadResponse = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
           method: 'POST',
           body: formData,
         })
